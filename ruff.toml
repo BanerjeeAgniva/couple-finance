@@ -1,0 +1,13 @@
+# Code-quality config (used locally and in CI).
+# Pyflakes (F) catches real bugs — unused/undefined names — and is the point of the
+# check. A few pycodestyle style rules are disabled because compact one-liners
+# (`d = dict(r); d["type"] = ...`) are an intentional house style in this small app.
+line-length = 120
+
+[lint]
+select = ["E", "F", "W"]
+ignore = [
+    "E702",  # multiple statements on one line (semicolon) — intentional compact style
+    "E741",  # ambiguous variable name (e.g. `l`) — used in tight comprehensions
+    "E501",  # line too long — long SQL/format strings are fine
+]

@@ -1,0 +1,7 @@
+# Dev / CI tooling (not needed at runtime). Install: pip install -r requirements-dev.txt
+# Kept minimal: pip-audit and schemathesis are installed per-job in CI so a tooling
+# hiccup there can't break the core test/lint jobs.
+-r requirements.txt
+ruff==0.16.7
+mypy==2.3.1
+hypothesis==6.168.0

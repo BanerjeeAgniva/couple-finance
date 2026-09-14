@@ -1,0 +1,18 @@
+# Render Blueprint — free web service backed by Turso (no card needed).
+# In Render: New + → Blueprint → pick this repo. Then set the secret env vars below.
+services:
+  - type: web
+    name: couple-finance
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: APP_PASSWORD          # the shared password you both type in
+        sync: false
+      - key: SECRET_KEY            # cookie-signing secret
+        generateValue: true
+      - key: TURSO_DATABASE_URL    # from `turso db show --url <name>`  (libsql://...)
+        sync: false
+      - key: TURSO_AUTH_TOKEN      # from `turso db tokens create <name>`
+        sync: false
