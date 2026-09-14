@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Couple Finance</title>
+<meta name="theme-color" content="#0b0f17">
+<script>
+  // set theme before first paint (no flash): saved override, else system
+  try {
+    var _t = localStorage.getItem('cf_theme');
+    document.documentElement.dataset.theme = (_t === 'light' || _t === 'dark') ? _t
+      : (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  } catch (e) { document.documentElement.dataset.theme = 'light'; }
+</script>
+<link rel="preload" href="/static/fonts/archivo-400-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/static/fonts/archivo-600-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/static/fonts.css">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<!--
+  THESIS: A shared household ledger where two people are co-present in every view; it refuses the solo-banking dashboard and the lone hero-metric.
+  OWN-WORLD: Cool paper-white ground, ink-black actions, two fixed person-colours (teal / burnt-orange). Archivo with tabular figures — an account-book texture. Hairline borders, real soft shadows, drawn 1.5px SVG icons.
+  STORY: Both partners glance, see who owes whom, log/scan an expense in seconds, settle (incl. UPI) to zero, and see where the money went.
+  FIRST VIEWPORT: A directional balance statement — two named people with money flowing between them — over an income-split proportion bar; quick-add within reach. Bottom tab bar (phone), left rail (desktop).
+  FORM: Shared account-ledger app. User-pinned direction (crisp modern-fintech); settle-up features added as an extension of this world.
+  FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
+-->
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <symbol id="i-add" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+  <symbol id="i-activity" viewBox="0 0 24 24"><path d="M3 12h4l2 6 4-14 2 8h6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-settle" viewBox="0 0 24 24"><path d="M4 8h13m0 0-3-3m3 3-3 3M20 16H7m0 0 3-3m-3 3 3 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-trends" viewBox="0 0 24 24"><path d="M5 20V10M12 20V4M19 20v-7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+  <symbol id="i-recurring" viewBox="0 0 24 24"><path d="M4 12a8 8 0 0 1 13.7-5.6L20 8m0 0V4m0 4h-4M20 12a8 8 0 0 1-13.7 5.6L4 16m0 0v4m0-4h4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-notes" viewBox="0 0 24 24"><path d="M5 4h14v16l-3-2-2 2-2-2-2 2-3-2V4Z M9 9h6M9 13h4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M6 5v6M6 15v4M12 5v2M12 13v6M18 5v6M18 15v4"/><circle cx="6" cy="13" r="2.1"/><circle cx="12" cy="9" r="2.1"/><circle cx="18" cy="13" r="2.1"/></g></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13M10 11v6M14 11v6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11m0 0 4-4m-4 4-4-4M5 19h14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-scan" viewBox="0 0 24 24"><path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2M7 12h10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L18.5 9.5a2.1 2.1 0 0 0-3-3L5 17v3Z M14 7l3 3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-upi" viewBox="0 0 24 24"><path d="M14 4L8 20M18 4l-4 8 4 8M6 4l2 4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24"><path d="M9 4h6l-1 6 3 3H7l3-3-1-6ZM12 16v4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <!-- category icons (own line-icons, 1.6 stroke) -->
+  <g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+  <symbol id="i-cat-rent" viewBox="0 0 24 24"><path d="M4 11.5 12 5l8 6.5M6 10.5V20h12v-9.5M10 20v-5h4v5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-cat-groceries" viewBox="0 0 24 24"><path d="M4 5h1.6l2 10.2a1 1 0 0 0 1 .8h7.6a1 1 0 0 0 1-.8L20 8H6.4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="9.5" cy="19.3" r="1.1" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="16.5" cy="19.3" r="1.1" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-cat-dining" viewBox="0 0 24 24"><path d="M7 4v6M5 4v3a2 2 0 0 0 4 0V4M7 10v10M16.5 4c-1.4 0-2.3 2-2.3 4.4s.9 3.6 2.3 3.6v8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-cat-utilities" viewBox="0 0 24 24"><path d="M13 3 5 13.5h5L9 21l9-11h-5l1-7z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-cat-transport" viewBox="0 0 24 24"><path d="M3.5 13l1.7-4.6A2 2 0 0 1 7.1 7h9.8a2 2 0 0 1 1.9 1.4L20.5 13v5h-3v-1.8h-11V18h-3zM3.5 13h17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="7.5" cy="15.5" r="1" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="16.5" cy="15.5" r="1" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="i-cat-shopping" viewBox="0 0 24 24"><path d="M6.5 8h11l-1 12h-9l-1-12zM9.5 8V6.2a2.5 2.5 0 0 1 5 0V8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-cat-furniture" viewBox="0 0 24 24"><path d="M5 11V9.2A2.2 2.2 0 0 1 7.2 7h9.6A2.2 2.2 0 0 1 19 9.2V11M4 12.5A1.8 1.8 0 0 1 7 14v2.5h10V14a1.8 1.8 0 0 1 3-1.4M4 12.5A1.8 1.8 0 0 1 6 14M20 12.5A1.8 1.8 0 0 0 18 14M6 16.5V19M18 16.5V19" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-cat-health" viewBox="0 0 24 24"><path d="M12 20S4 15 4 9.5A4.5 4.5 0 0 1 12 6a4.5 4.5 0 0 1 8 3.5C20 15 12 20 12 20zM8.5 11h2l1-2 1.5 4 1-2h2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-cat-fun" viewBox="0 0 24 24"><path d="M10 8v8l6-4-6-4z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-cat-travel" viewBox="0 0 24 24"><path d="M4 13.5 20 7l-5.5 13.5-2.2-6.3L6 11.7z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-cat-gift" viewBox="0 0 24 24"><path d="M5 10h14v10H5V10zM4 7h16v3H4V7zM12 7v13M12 7C10.5 3.5 6.5 4.5 8 7c1 1.6 4 0 4 0zM12 7c1.5-3.5 5.5-2.5 4 0-1 1.6-4 0-4 0z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-cat-education" viewBox="0 0 24 24"><path d="M3 9.5 12 5.5l9 4-9 4-9-4zM7 11.5V16c0 1.2 2.4 2.2 5 2.2s5-1 5-2.2v-4.5M21 9.5V14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-cat-pets" viewBox="0 0 24 24"><circle cx="8" cy="9" r="1.4" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="12" cy="7.6" r="1.4" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="16" cy="9" r="1.4" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M12 12c-2.4 0-3.8 1.9-3.8 3.4S9.6 18 12 18s3.8-1.1 3.8-2.6S14.4 12 12 12z" fill="none" stroke="currentColor" stroke-width="1.5"/></symbol>
+  <symbol id="i-cat-package" viewBox="0 0 24 24"><path d="M12 3 4 7v10l8 4 8-4V7l-8-4zM4 7l8 4 8-4M12 11v10M8 5l8 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-cat-delivery" viewBox="0 0 24 24"><circle cx="6" cy="16.5" r="2.4" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="17.5" cy="16.5" r="2.4" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8.4 16.5h6.8l1.9-6.5M6 14.2 7.6 9.5H12l1.6 4.7M13.5 7.5h2.4l1.5 4M4 9.5h3.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-cat-quick" viewBox="0 0 24 24"><path d="M5 8h14l-1.1 11.3a1 1 0 0 1-1 .9H7.1a1 1 0 0 1-1-.9L5 8zM8.5 8V6.6a3.5 3.5 0 0 1 7 0V8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M12.6 10.6l-2.3 3.9H13l-1.6 3.6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-cat-services" viewBox="0 0 24 24"><path d="M15.6 5.2a4 4 0 0 0-5.3 5.3L4.6 16.2a1.8 1.8 0 0 0 2.5 2.5l5.7-5.7a4 4 0 0 0 5.3-5.3l-2.6 2.6-2.3-.4-.4-2.3 2.8-2.4z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-cat-other" viewBox="0 0 24 24"><path d="M6 3h12v18l-2-1.4-2 1.4-2-1.4-2 1.4-2-1.4L6 21V3zM9 8.5h6M9 12.5h6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  </g>
+</defs></svg>
+
+<!-- LOGIN -->
+<div id="login" class="login" hidden>
+  <form class="login-card" onsubmit="event.preventDefault(); doLogin()">
+    <div class="login-mark"><span class="dot dot-a"></span><span class="dot dot-b"></span></div>
+    <h1>Couple Finance</h1>
+    <p class="login-sub">Your shared household ledger.</p>
+    <input id="pw" type="password" placeholder="Shared password" autocomplete="current-password" aria-label="Shared password">
+    <button type="submit" class="btn btn-primary btn-block">Open the ledger</button>
+    <p id="login-err" class="err" role="alert"></p>
+  </form>
+</div>
+
+<!-- APP -->
+<div id="app" hidden>
+  <aside class="rail">
+    <div class="rail-brand"><span class="dot dot-a"></span><span class="dot dot-b"></span><span class="rail-name">Couple&nbsp;Finance</span></div>
+    <nav id="tabs" class="rail-nav" aria-label="Sections">
+      <button data-tab="add" class="tab-btn active"><svg class="ic"><use href="#i-add"/></svg><span>Add</span></button>
+      <button data-tab="activity" class="tab-btn"><svg class="ic"><use href="#i-activity"/></svg><span>Activity</span></button>
+      <button data-tab="settle" class="tab-btn"><svg class="ic"><use href="#i-settle"/></svg><span>Settle</span></button>
+      <button data-tab="trends" class="tab-btn"><svg class="ic"><use href="#i-trends"/></svg><span>Trends</span></button>
+      <button data-tab="recurring" class="tab-btn"><svg class="ic"><use href="#i-recurring"/></svg><span>Recurring</span></button>
+      <button data-tab="scratch" class="tab-btn"><svg class="ic"><use href="#i-notes"/></svg><span>Notes</span></button>
+      <button data-tab="settings" class="tab-btn"><svg class="ic"><use href="#i-settings"/></svg><span>Settings</span></button>
+    </nav>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div class="topbar-title" id="topbar-title">Add expense</div>
+      <button class="balance-chip" onclick="goTab('settle')" id="balance-chip" aria-label="View balance">…</button>
+    </header>
+
+    <div class="scroll">
+    <!-- ADD -->
+    <section id="tab-add" class="tab">
+      <div class="hero">
+        <div class="hero-eyebrow">Balance</div>
+        <div id="hero-balance" class="flow" aria-live="polite">…</div>
+        <div class="split-strip" id="split-strip" hidden>
+          <div class="split-bar"><span class="split-a" id="split-a"></span><span class="split-b" id="split-b"></span></div>
+          <div class="split-legend" id="split-legend"></div>
+        </div>
+      </div>
+
+      <form id="expense-form" class="sheet" onsubmit="return addExpense(event)">
+        <div class="sheet-head">
+          <span>New expense</span>
+          <input name="date" type="date" class="head-date-input" aria-label="Date">
+        </div>
+        <div class="payer paidby-row" role="radiogroup" aria-label="Paid by">
+          <div class="segmented" id="paidby-seg"></div>
+        </div>
+        <div class="cat-amt-grid">
+          <div class="cat-pick">
+            <button type="button" id="cat-btn" class="cat-btn" aria-label="Category" aria-haspopup="true" aria-expanded="false" onclick="toggleCatPop()">
+              <svg class="cat-ic" id="cat-btn-ic"><use href="#i-cat-other"/></svg>
+              <svg class="caret" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <div class="cat-pop" id="cat-pop" role="listbox" aria-label="Choose category" hidden></div>
+          </div>
+          <select name="category_id" id="cat-select" aria-hidden="true" hidden></select>
+          <div class="amount-field">
+            <span class="cur">₹</span>
+            <input name="amount" type="number" step="0.01" min="0" placeholder="0.00" required inputmode="decimal" aria-label="Amount">
+            <button type="button" id="scan-btn" class="scan-in" hidden aria-label="Scan receipt" onclick="document.getElementById('scan-input').click()">
+              <svg class="ic"><use href="#i-scan"/></svg>
+            </button>
+            <input type="file" id="scan-input" accept="image/*" capture="environment" hidden onchange="scanReceipt(this)">
+          </div>
+        </div>
+        <input name="description" placeholder="What was it for?" required aria-label="Description">
+        <div id="scan-status" class="scan-status" hidden></div>
+        <div class="split-row">
+          <span class="split-lbl">Split</span>
+          <select id="split-sel" aria-label="Split type" onchange="setSplitAdd(this.value)">
+            <option value="ratio" selected>By income</option>
+            <option value="half">50 : 50</option>
+            <option value="custom">Custom</option>
+          </select>
+        </div>
+        <div class="ov-row" id="ov-custom" hidden>
+          <input name="override_r1" type="number" min="0" placeholder="A" aria-label="ratio A">
+          <span>:</span>
+          <input name="override_r2" type="number" min="0" placeholder="B" aria-label="ratio B">
+          <span class="ov-quick" data-seg="split-sel" data-a="100" data-b="0">100% A</span>
+          <span class="ov-quick" data-seg="split-sel" data-a="0" data-b="100">100% B</span>
+        </div>
+        <button type="submit" class="btn btn-primary btn-block">Add to ledger</button>
+      </form>
+    </section>
+
+    <!-- ACTIVITY -->
+    <section id="tab-activity" class="tab" hidden>
+      <div id="activity-list" class="ledger"></div>
+    </section>
+
+    <!-- SETTLE -->
+    <section id="tab-settle" class="tab" hidden>
+      <div class="hero hero-lg">
+        <div class="hero-eyebrow">Where you stand</div>
+        <div id="settle-flow" class="flow flow-lg" aria-live="polite">…</div>
+        <p class="hero-note" id="settle-note"></p>
+        <a id="upi-btn" class="btn btn-upi" hidden href="#"><svg class="ic"><use href="#i-upi"/></svg> <span id="upi-label">Pay via UPI</span></a>
+        <div id="pay-fallback" class="pay-fallback" hidden>
+          <div class="qr-box"><img id="upi-qr" alt="Scan with any UPI app to pay" width="168" height="168" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=="></div>
+          <button type="button" class="copy-upi" id="copy-upi" onclick="copyUpi()"></button>
+          <div class="pay-fallback-note">On iPhone or a computer, scan the QR from any UPI app — or copy the ID.</div>
+        </div>
+        <div id="settle-controls" class="settle-controls" hidden>
+          <div class="amount-field sm settle-amt"><span class="cur">₹</span><input id="settle-amount" type="number" step="0.01" min="0" inputmode="decimal" aria-label="Settle amount"></div>
+          <button class="btn btn-primary" onclick="settleUp()"><svg class="ic"><use href="#i-check"/></svg> Mark settled</button>
+        </div>
+      </div>
+      <div class="sheet" id="settle-history-wrap" hidden>
+        <div class="sheet-head">Settlement history</div>
+        <div id="settle-history" class="ledger"></div>
+      </div>
+    </section>
+
+    <!-- TRENDS -->
+    <section id="tab-trends" class="tab" hidden>
+      <div class="trends-head">
+        <div class="segmented segmented-sm" id="range-seg"></div>
+      </div>
+      <div id="trends-box"></div>
+    </section>
+
+    <!-- RECURRING -->
+    <section id="tab-recurring" class="tab" hidden>
+      <form id="rec-form" class="sheet" onsubmit="return addRecurring(event)">
+        <div class="sheet-head"><span>Recurring expense</span></div>
+        <p class="sheet-sub">Auto-posted each month on the day you choose.</p>
+        <div class="amount-field"><span class="cur">₹</span>
+          <input name="amount" type="number" step="0.01" min="0" placeholder="0.00" required inputmode="decimal" aria-label="Amount"></div>
+        <input name="description" placeholder="Description (Rent, Wi-Fi…)" required>
+        <div class="field-grid">
+          <select name="category_id" id="rec-cat" aria-label="Category"></select>
+          <input name="paid_to" placeholder="Paid to">
+        </div>
+        <div class="payer" role="radiogroup" aria-label="Paid by">
+          <span class="payer-label">Paid by</span>
+          <div class="segmented" id="rec-paidby-seg"></div>
+        </div>
+        <label class="mini">Day of month<input name="day_of_month" type="number" min="1" max="28" value="1" required></label>
+        <button type="submit" class="btn btn-primary btn-block">Add recurring</button>
+      </form>
+      <div id="rec-list" class="ledger"></div>
+    </section>
+
+    <!-- NOTES -->
+    <section id="tab-scratch" class="tab" hidden>
+      <div id="notes-list-view">
+        <div class="notes-head">
+          <input id="notes-search" class="notes-search" placeholder="Search notes…" oninput="renderNotesList()" aria-label="Search notes">
+          <button type="button" class="chip-btn" onclick="newNote()"><svg class="ic"><use href="#i-add"/></svg> New note</button>
+        </div>
+        <div id="notes-list" class="notes-grid"></div>
+      </div>
+      <div id="notes-editor-view" hidden>
+        <div class="notes-editor-bar">
+          <button type="button" class="back-btn" onclick="backToNotes()"><svg class="ic"><use href="#i-back"/></svg> Notes</button>
+          <small id="scratch-status" class="notes-status"></small>
+          <div class="editor-actions">
+            <button type="button" class="chip-btn" id="pin-btn" onclick="togglePin()" aria-label="Pin note"><svg class="ic"><use href="#i-pin"/></svg></button>
+            <button type="button" class="chip-btn" onclick="insertChecklistItem()" aria-label="Add checklist item"><svg class="ic"><use href="#i-check"/></svg></button>
+            <button type="button" class="chip-btn danger-btn" onclick="deleteCurrentNote()" aria-label="Delete note"><svg class="ic"><use href="#i-trash"/></svg></button>
+          </div>
+        </div>
+        <div id="checklist-panel" class="checklist-panel" hidden></div>
+        <div class="notes-wrap">
+          <textarea id="scratch" placeholder="Write anything — a to-buy list, trip plan, reminders…&#10;Tip: “- [ ] task” makes a checklist." aria-label="Note"></textarea>
+        </div>
+      </div>
+    </section>
+
+    <!-- SETTINGS -->
+    <section id="tab-settings" class="tab" hidden>
+      <form id="settings-form" class="sheet" onsubmit="return saveSettings(event)">
+        <div class="sheet-head"><span>People, incomes &amp; UPI</span></div>
+        <p class="sheet-sub">The split ratio comes from your incomes. New expenses use it; past ones keep their own. UPI IDs power one-tap paybacks.</p>
+        <div class="person-block">
+          <div class="person-row">
+            <button type="button" class="chip chip-a avatar-edit" id="av-1" onclick="pickAvatar(1)" aria-label="Set photo for person A">A</button>
+            <input name="name1" placeholder="Name" required aria-label="Name A">
+            <div class="amount-field sm"><span class="cur">₹</span><input name="income1" type="number" step="0.01" min="0" required aria-label="Income A"></div>
+          </div>
+          <div class="av-actions"><button type="button" class="av-link" onclick="pickAvatar(1)">Add photo</button><button type="button" class="av-link av-remove" id="av-rm-1" hidden onclick="removeAvatar(1)">Remove</button></div>
+          <input type="file" id="av-in-1" accept="image/*" hidden onchange="onAvatarPick(1,this)">
+          <input name="upi1" placeholder="UPI ID (name@bank) — optional" aria-label="UPI A" class="upi-in">
+          <small class="upi-hint"></small>
+        </div>
+        <div class="person-block">
+          <div class="person-row">
+            <button type="button" class="chip chip-b avatar-edit" id="av-2" onclick="pickAvatar(2)" aria-label="Set photo for person B">B</button>
+            <input name="name2" placeholder="Name" required aria-label="Name B">
+            <div class="amount-field sm"><span class="cur">₹</span><input name="income2" type="number" step="0.01" min="0" required aria-label="Income B"></div>
+          </div>
+          <div class="av-actions"><button type="button" class="av-link" onclick="pickAvatar(2)">Add photo</button><button type="button" class="av-link av-remove" id="av-rm-2" hidden onclick="removeAvatar(2)">Remove</button></div>
+          <input type="file" id="av-in-2" accept="image/*" hidden onchange="onAvatarPick(2,this)">
+          <input name="upi2" placeholder="UPI ID (name@bank) — optional" aria-label="UPI B" class="upi-in">
+          <small class="upi-hint"></small>
+        </div>
+        <div class="ratio-preview" id="ratio-preview"></div>
+        <button type="submit" class="btn btn-primary btn-block">Save</button>
+      </form>
+
+      <div class="sheet">
+        <div class="sheet-head"><span>Categories</span></div>
+        <div id="cat-manage" class="chips"></div>
+        <form class="add-inline" onsubmit="return addCategory(event)">
+          <input name="name" placeholder="New category" required>
+          <button type="submit" class="btn btn-ghost">Add</button>
+        </form>
+      </div>
+
+      <div class="sheet">
+        <div class="sheet-head"><span>Appearance</span></div>
+        <div class="payer">
+          <span class="payer-label">Theme</span>
+          <div class="segmented segmented-sm" id="theme-seg">
+            <button type="button" class="seg-opt" data-t="light" onclick="setTheme('light')">Light</button>
+            <button type="button" class="seg-opt" data-t="dark" onclick="setTheme('dark')">Dark</button>
+            <button type="button" class="seg-opt" data-t="system" onclick="setTheme('system')">System</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="sheet">
+        <div class="sheet-head"><span>Export</span></div>
+        <p class="sheet-sub">Download a CSV of transactions with each person's share.</p>
+        <div class="field-grid">
+          <label class="mini">Range<select id="export-range">
+            <option value="30">Last 30 days</option>
+            <option value="90">Last 90 days</option>
+            <option value="365">Last year</option>
+            <option value="0">All time</option>
+          </select></label>
+          <label class="mini check-lbl"><input type="checkbox" id="export-settlements"> Include settlements</label>
+        </div>
+        <button onclick="exportCsv()" class="btn btn-dark btn-block"><svg class="ic"><use href="#i-download"/></svg> Download CSV</button>
+      </div>
+    </section>
+    </div>
+  </main>
+
+  <nav id="tabbar" class="tabbar" aria-label="Sections"></nav>
+</div>
+
+<div id="toasts" class="toasts" aria-live="polite"></div>
+
+<!-- FIRST-RUN ONBOARDING -->
+<div id="onboarding" class="onb" hidden>
+  <form class="onb-card" id="onb-form" onsubmit="return saveOnboarding(event)">
+    <div class="login-mark"><span class="dot dot-a"></span><span class="dot dot-b"></span></div>
+    <h1>Set up your shared ledger</h1>
+    <p class="onb-sub">Add both of you and your incomes. Every expense then splits by your income ratio automatically — set it once, forget it.</p>
+    <div class="onb-people">
+      <div class="onb-person">
+        <span class="chip chip-a" id="onb-chip-1">A</span>
+        <input name="name1" placeholder="Your name" required aria-label="Name A">
+        <div class="amount-field sm"><span class="cur">₹</span><input name="income1" type="number" step="0.01" min="0" placeholder="income" required inputmode="decimal" aria-label="Income A"></div>
+      </div>
+      <div class="onb-person">
+        <span class="chip chip-b" id="onb-chip-2">B</span>
+        <input name="name2" placeholder="Partner" required aria-label="Name B">
+        <div class="amount-field sm"><span class="cur">₹</span><input name="income2" type="number" step="0.01" min="0" placeholder="income" required inputmode="decimal" aria-label="Income B"></div>
+      </div>
+    </div>
+    <div class="onb-ratio" id="onb-ratio">
+      <div class="onb-ratio-hint" id="onb-ratio-hint">Enter both incomes to see your split</div>
+      <div class="split-strip" id="onb-split" hidden>
+        <div class="split-bar"><span class="split-a" id="onb-split-a"></span><span class="split-b" id="onb-split-b"></span></div>
+        <div class="split-legend" id="onb-split-legend"></div>
+      </div>
+    </div>
+    <details class="onb-upi">
+      <summary>Add UPI IDs for one-tap paybacks (optional)</summary>
+      <input name="upi1" placeholder="Your UPI ID (name@bank)" aria-label="UPI A">
+      <small class="upi-hint"></small>
+      <input name="upi2" placeholder="Partner's UPI ID (name@bank)" aria-label="UPI B">
+      <small class="upi-hint"></small>
+    </details>
+    <button type="submit" class="btn btn-primary btn-block">Start tracking</button>
+    <button type="button" class="onb-skip" onclick="skipOnboarding()">I'll set this up later</button>
+  </form>
+</div>
+
+<!-- WELCOME-BACK "did you pay?" PROMPT -->
+<div id="pay-prompt" class="modal" hidden>
+  <div class="modal-backdrop" onclick="dismissPayPrompt()"></div>
+  <div class="modal-card pay-prompt-card">
+    <div class="pay-prompt-badge"><svg class="ic"><use href="#i-upi"/></svg></div>
+    <h2 id="pay-prompt-title">Did you pay?</h2>
+    <p class="pay-prompt-sub">Mark it settled to reset your balance to zero.</p>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="dismissPayPrompt()">Not yet</button>
+      <button class="btn btn-primary" onclick="confirmPayPrompt()"><svg class="ic"><use href="#i-check"/></svg> Mark settled</button>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT MODAL -->
+<div id="edit-modal" class="modal" hidden>
+  <div class="modal-backdrop" onclick="closeEdit()"></div>
+  <form class="modal-card sheet" id="edit-form" onsubmit="return saveEdit(event)">
+    <div class="sheet-head"><span>Edit expense</span>
+      <button type="button" class="chip-btn" onclick="closeEdit()"><svg class="ic"><use href="#i-x"/></svg></button></div>
+    <input type="hidden" name="id">
+    <div class="amount-field"><span class="cur">₹</span>
+      <input name="amount" type="number" step="0.01" min="0" required inputmode="decimal" aria-label="Amount"></div>
+    <input name="description" placeholder="What was it for?" required>
+    <div class="field-grid">
+      <select name="category_id" id="edit-cat" aria-label="Category"></select>
+      <input name="paid_to" placeholder="Paid to">
+    </div>
+    <div class="payer"><span class="payer-label">Paid by</span><div class="segmented" id="edit-paidby-seg"></div></div>
+    <div class="payer"><span class="payer-label">Split</span><div class="segmented segmented-sm" id="edit-split-seg"></div></div>
+    <div class="ov-row" id="edit-ov" hidden>
+      <input name="override_r1" type="number" min="0" placeholder="A"><span>:</span>
+      <input name="override_r2" type="number" min="0" placeholder="B">
+      <span class="ov-quick" data-seg="edit-split-seg" data-a="100" data-b="0">100% A</span>
+      <span class="ov-quick" data-seg="edit-split-seg" data-a="0" data-b="100">100% B</span>
+    </div>
+    <label class="mini">Date<input name="date" type="date"></label>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-danger" onclick="deleteFromEdit()"><svg class="ic"><use href="#i-trash"/></svg> Delete</button>
+      <button type="submit" class="btn btn-primary">Save changes</button>
+    </div>
+  </form>
+</div>
+
+<script src="/static/qrcode.min.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>

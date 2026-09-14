@@ -1,0 +1,16 @@
+name: keep-alive
+# Pings the Render free service every ~10 min so it never cold-starts (~30s → ~0.3s).
+# Free: this repo is public, so Actions minutes are unlimited.
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping the app
+        run: |
+          code=$(curl -fsS -m 30 -o /dev/null -w "%{http_code}" https://couple-finance.onrender.com/api/me) || true
+          echo "ping -> HTTP $code"

@@ -1,0 +1,5 @@
+fastapi
+uvicorn[standard]
+libsql-experimental
+httpx
+python-multipart
