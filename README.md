@@ -103,6 +103,57 @@ Fully responsive — the phone experience scales to a clean desktop workspace.
 
 ---
 
+## Architecture
+
+Three clean tiers — a static **frontend**, a FastAPI **backend**, and a SQLite/Turso **database**.
+The browser only ever talks to the backend over HTTP; the backend is the only thing that touches the DB.
+
+| Tier | Lives in | What it is | Talks to |
+|------|----------|------------|----------|
+| **Frontend** | `static/` (`index.html`, `app.js`, `js/`) | Zero-framework HTML/CSS/JS, served as static files | → Backend, via `fetch` HTTP calls |
+| **Backend** | `app.py` + `routers/*` + `auth`, `money`, `config` | FastAPI app: 9 feature routers over 4 shared modules | ← Frontend · → Database |
+| **Database** | `db.py` → `couple_finance.db` **or** Turso (hosted libSQL) | Rows, balances, migrations. Same code, swaps by env var | ← Backend only |
+
+**Backend module map** — dependencies only ever point *downward*; no router imports another router, no cycles:
+
+```
+                         BROWSER  (static/ — HTML/CSS/JS frontend)
+                            │  HTTP  (fetch)
+                            ▼
+┌─────────────────────────────────────────────────────────┐
+│  app.py   — composition root (48 lines)                  │
+│  • builds FastAPI app, includes all routers              │
+│  • serves index.html + /static, runs init_db()/migrate() │
+└─────────────────────────────────────────────────────────┘
+                            │ mounts 9 routers
+      ┌──────────┬──────────┼──────────┬──────────┬─────────┐
+      ▼          ▼          ▼          ▼          ▼         ▼
+  session    settings   expenses   recurring   ledger   insights   ocr   notes   export
+  (login)   (ratio/…)  (add/list)  (rules)    (balance) (charts)  (rcpt)  (memo) (csv)
+      │          │          │          │          │         │       │       │      │
+      └──────────┴──────────┴────┬─────┴──────────┴─────────┴───────┴───────┴──────┘
+                                 │ every router leans on the same 4 modules
+             ┌───────────────────┼───────────────────┬──────────────────┐
+             ▼                   ▼                   ▼                  ▼
+        ┌─────────┐        ┌──────────┐        ┌──────────┐      ┌───────────┐
+        │  auth   │        │   db     │        │  money   │      │  config   │
+        │ token / │        │ SQLite/  │        │ PURE     │      │ constants │
+        │ require │        │ Turso    │        │ domain:  │      │ (paths,   │
+        │ _auth   │        │ rows,    │        │ split,   │      │  names,   │
+        │         │        │ balance, │        │ balance, │      │  env)     │
+        │         │        │ migrate  │        │ upi,ocr  │      │           │
+        └────┬────┘        └────┬─────┘        └──────────┘      └─────┬─────┘
+             │                  │              (no deps —              │
+             └──────────────────┴──────── depends on config ──────────┘
+                                          │
+                                          ▼
+                              DATABASE  (couple_finance.db / Turso)
+```
+
+- **`money.py`** is pure domain — zero imports of the others, so `test_money.py` tests it in isolation.
+- **`config.py`** is the leaf everything stands on.
+- The **db** tier is the same code whether it hits a local `.db` file or hosted Turso — chosen by the `TURSO_*` env vars.
+
 ## Run locally
 ```bash
 pip install -r requirements.txt
