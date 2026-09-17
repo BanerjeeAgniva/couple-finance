@@ -81,6 +81,10 @@ A UPI deep-link and a QR pay the exact amount to the right person. The balance u
 Monthly spend split by person, per-person totals, and a full category breakdown.
 ![Trends](screenshots/08-trends.png)
 
+**Spend history** — tap any of your most-used categories to chart its spend over time, like a
+price-history graph: the range it moved through and where this month lands, each category in its own color.
+![Spend history](screenshots/spend-history.png)
+
 ### 09 · Recurring — rent and bills post themselves
 Set rent and broadband once; they auto-post every month on the right day, to the right payer.
 ![Recurring](screenshots/09-recurring.png)
