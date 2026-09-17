@@ -1,5 +1,7 @@
 # Couple Finance
 
+[![CI](https://github.com/BanerjeeAgniva/couple-finance/actions/workflows/ci.yml/badge.svg)](https://github.com/BanerjeeAgniva/couple-finance/actions/workflows/ci.yml)
+
 **The shared wallet for two people whose incomes aren't equal.**
 
 Roommates split 50/50. Couples don't live 50/50. When one partner earns ₹90k and the other ₹60k,
