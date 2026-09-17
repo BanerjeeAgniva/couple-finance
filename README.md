@@ -105,6 +105,11 @@ Fully responsive — the phone experience scales to a clean desktop workspace.
 
 ## Architecture
 
+**We've used a modular monolith** — a resource-oriented (router-per-resource) FastAPI app with a
+functional core (`money.py` is pure, zero imports) and a single composition root (`app.py`). One
+deployable, split into focused modules; the FastAPI-idiomatic layout, deliberately *not* the heavier
+layered / hexagonal / clean-architecture styles that a two-user app this size doesn't need.
+
 Three clean tiers — a static **frontend**, a FastAPI **backend**, and a SQLite/Turso **database**.
 The browser only ever talks to the backend over HTTP; the backend is the only thing that touches the DB.
 
@@ -189,6 +194,33 @@ The app uses plain `sqlite3` locally and **Turso** (hosted libSQL) automatically
 See `fly.toml`: `fly launch --no-deploy`, `fly volumes create data --size 1`,
 `fly secrets set APP_PASSWORD=... SECRET_KEY=$(openssl rand -hex 32)`, `fly deploy`.
 On Fly, leave the Turso vars unset — it uses the local SQLite file on the volume.
+
+## Development
+
+```bash
+make install   # pip install -r requirements.txt
+make run       # uvicorn app:app --reload  (defaults APP_PASSWORD/SECRET_KEY)
+make test      # python test_money.py + test_app.py
+make lint      # ruff check .
+```
+
+## Continuous integration
+
+`.github/workflows/ci.yml` runs on every push and PR:
+
+- **Tests** — `test_money.py` (pure money math) and `test_app.py` (integration smoke via
+  `TestClient`, offline against a throwaway SQLite DB).
+- **Code quality** — `ruff check .` (config in `ruff.toml`).
+- **Turso smoke** — runs only when the `TURSO_DATABASE_URL` / `TURSO_AUTH_TOKEN` repo secrets are set;
+  boots the app against Turso and checks migrate + bootstrap. **Point those secrets at a throwaway
+  test database, not production.**
+- **Render deploy** — on push to `main`. Render already auto-deploys `main` via its GitHub integration;
+  the job additionally hits `RENDER_DEPLOY_HOOK_URL` if that secret is set (otherwise it no-ops).
+
+One-time manual setup (repo owner):
+1. Install the **CodeRabbit** GitHub app on the repo — config lives in `.coderabbit.yaml`.
+2. (Optional) Add repo **secrets**: `TURSO_DATABASE_URL` + `TURSO_AUTH_TOKEN` (test DB) for the Turso
+   smoke, and `RENDER_DEPLOY_HOOK_URL` if you want CI to trigger the Render deploy.
 
 ## Notes
 - All money is stored as integer **paise** — no floating-point rounding bugs.

@@ -1,0 +1,25 @@
+# CodeRabbit configuration (https://docs.coderabbit.ai).
+# Requires installing the CodeRabbit GitHub app on the repo (one-time, via the repo owner).
+language: en-US
+reviews:
+  profile: chill
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  review_status: true
+  auto_review:
+    enabled: true
+    drafts: false
+  path_filters:
+    - "!static/qrcode.min.js"
+    - "!static/fonts/**"
+    - "!screenshots/**"
+    - "!**/*.gif"
+    - "!**/*.png"
+  path_instructions:
+    - path: "money.py"
+      instructions: "Pure domain logic. Money is integer paise; flag any float math on money or any FastAPI/DB import creeping in here."
+    - path: "routers/**"
+      instructions: "Each router is one resource. Flag business/DB logic that belongs in db.py or money.py, and any cross-router imports."
+chat:
+  auto_reply: true
