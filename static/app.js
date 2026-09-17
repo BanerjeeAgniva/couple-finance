@@ -11,6 +11,7 @@ const rs = (p) => "₹" + (p / 100).toLocaleString("en-IN", { minimumFractionDig
 const rs0 = (p) => "₹" + Math.round(p / 100).toLocaleString("en-IN");
 const toPaise = (r) => Math.round(parseFloat(r) * 100);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const mLabel = (k) => new Date(k + "-01T00:00").toLocaleDateString("en-IN", { month: "short" });
 const jbody = (o) => ({ method: o.method || "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(o.body) });
 const fmtDate = (iso) => { const d = new Date(iso + "T00:00"); return isNaN(d) ? iso : d.toLocaleDateString("en-IN", { day: "numeric", month: "short" }); };
 const ls = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } },
@@ -524,13 +525,74 @@ function buildRangeSeg() {
     RANGE = +b.dataset.m; el.querySelectorAll(".seg-opt").forEach((x) => x.classList.toggle("on", x === b)); loadTrends();
   });
 }
+// spend-history: pick a top category, chart its monthly spend (Rufus-style area/line)
+let HIST_CAT = null, HIST_DATA = null;
+
+function sparkSvg(series, months, color) {
+  const W = 340, H = 150, pL = 42, pR = 14, pT = 16, pB = 26;
+  const plotW = W - pL - pR, plotH = H - pT - pB, base = pT + plotH;
+  const n = series.length, max = Math.max(1, ...series);
+  const xAt = (i) => n <= 1 ? pL + plotW / 2 : pL + (i * plotW) / (n - 1);
+  const yAt = (v) => pT + (1 - v / max) * plotH;
+  const pts = series.map((v, i) => [xAt(i), yAt(v)]);
+  const line = pts.map((p, i) => (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join(" ");
+  const area = n <= 1 ? "" : `${line} L ${xAt(n - 1).toFixed(1)} ${base} L ${xAt(0).toFixed(1)} ${base} Z`;
+  const grid = [pT, pT + plotH / 2, base].map((y) =>
+    `<line x1="${pL}" y1="${y}" x2="${W - pR}" y2="${y}" class="spark-grid" vector-effect="non-scaling-stroke"/>`).join("");
+  const yLbls = `<text x="${pL - 6}" y="${pT + 3}" class="spark-ax" text-anchor="end">${rs0(max)}</text>
+    <text x="${pL - 6}" y="${base + 3}" class="spark-ax" text-anchor="end">₹0</text>`;
+  const step = n > 6 ? 2 : 1;
+  const xLbls = months.map((m, i) => (i % step === 0 || i === n - 1)
+    ? `<text x="${xAt(i).toFixed(1)}" y="${H - 8}" class="spark-ax" text-anchor="middle">${mLabel(m.month)}</text>` : "").join("");
+  const last = pts[n - 1], cur = rs0(series[n - 1]);
+  const dot = `<circle cx="${last[0].toFixed(1)}" cy="${last[1].toFixed(1)}" r="4" style="fill:${color}" class="spark-dot"/>`;
+  const bw = 12 + cur.length * 6.4, bx = Math.max(pL, Math.min(W - pR - bw, last[0] - bw / 2));
+  const by = last[1] < pT + 24 ? last[1] + 8 : last[1] - 25;
+  const callout = `<rect x="${bx.toFixed(1)}" y="${by.toFixed(1)}" width="${bw.toFixed(1)}" height="18" rx="6" style="fill:${color}"/>
+    <text x="${(bx + bw / 2).toFixed(1)}" y="${(by + 12.6).toFixed(1)}" class="spark-cur" text-anchor="middle">${cur}</text>`;
+  return `<svg class="spark" viewBox="0 0 ${W} ${H}" role="img" aria-label="Monthly spend chart">
+    ${grid}${yLbls}
+    ${area ? `<path d="${area}" style="fill:${color};fill-opacity:.14"/>` : ""}
+    <path d="${line}" style="stroke:${color}" class="spark-line" vector-effect="non-scaling-stroke"/>
+    ${dot}${xLbls}${callout}</svg>`;
+}
+
+function histCardHTML() {
+  if (!HIST_DATA) return "";
+  const { cats, months } = HIST_DATA;
+  const top = [...cats].sort((a, b) => b.count - a.count).filter((c) => c.count > 0).slice(0, 5);
+  if (!top.length) return "";
+  if (!top.some((c) => c.category === HIST_CAT)) HIST_CAT = top[0].category;
+  const sel = top.find((c) => c.category === HIST_CAT);
+  const color = catColor(sel.category) || "var(--a)";
+  const s = sel.series, cur = s[s.length - 1], mn = Math.min(...s), mx = Math.max(...s);
+  const pills = top.map((c) => {
+    const pc = catColor(c.category) || "var(--a)";
+    return `<button type="button" class="hist-pill${c.category === sel.category ? " on" : ""}" data-cat="${esc(c.category)}" style="--pc:${pc}">
+      <svg class="cat-ic" style="color:${pc}"><use href="#${catIconId(c.category)}"/></svg>${esc(c.category)}</button>`;
+  }).join("");
+  const header = `Over the past ${RANGE} months, your <b style="color:${color}">${esc(sel.category)}</b> spend ranged <b>${rs0(mn)}</b>–<b>${rs0(mx)}</b> · this month <b>${rs0(cur)}</b>.`;
+  return `<div class="chart-card hist-card" id="hist-card">
+    <div class="chart-title">Spend history</div>
+    <div class="hist-pills">${pills}</div>
+    <div class="hist-head">${header}</div>
+    ${sparkSvg(sel.series, months, color)}</div>`;
+}
+
+function wireHistPills() {
+  document.querySelectorAll(".hist-pill").forEach((b) => b.onclick = () => {
+    HIST_CAT = b.dataset.cat;
+    const el = $("#hist-card"); if (el) { el.outerHTML = histCardHTML(); wireHistPills(); }
+  });
+}
+
 async function loadTrends() {
   const d = await api("/api/analytics?months=" + RANGE);
+  HIST_DATA = { cats: d.by_category, months: d.months };
   const maxM = Math.max(1, ...d.months.map((m) => m.total_paise));
   const totalRange = d.months.reduce((s, m) => s + m.total_paise, 0);
   const sum1 = d.months.reduce((s, m) => s + m.share1_paise, 0);
   const sum2 = d.months.reduce((s, m) => s + m.share2_paise, 0);
-  const mLabel = (k) => new Date(k + "-01T00:00").toLocaleDateString("en-IN", { month: "short" });
 
   // stacked monthly bars (A share teal / B share orange)
   const bars = d.months.map((m) => {
@@ -561,7 +623,9 @@ async function loadTrends() {
       <div class="chart-title">Monthly spend</div>
       <div class="bar-chart">${bars}</div>
     </div>
+    ${histCardHTML()}
     <div class="cat-block">${cats || emptyState("trends", "No spending yet", "Once you log expenses they'll chart here by month, person, and category.", "goTab('add')")}</div>`;
+  wireHistPills();
 }
 
 // --- recurring -------------------------------------------------------------

@@ -1,7 +1,7 @@
 """Runnable checks for the money path. `python test_money.py`."""
 import os
 os.environ["DB_PATH"] = "/tmp/couple_test.db"  # keep import-time init_db off the real db
-from app import split, resolve_ratio, compute_balance, upi_link, parse_receipt_total
+from app import split, resolve_ratio, compute_balance, upi_link, parse_receipt_total, category_monthly
 
 
 def test_split_sums_exactly():
@@ -60,6 +60,25 @@ def test_parse_receipt_total():
     assert parse_receipt_total("BIG BAZAAR\nItem 100.00\nSub Total 400.00\nGrand Total 428.00") == 42800
     assert parse_receipt_total("shop\n12.50\n999.99\nno label") == 99999   # largest fallback
     assert parse_receipt_total("nothing numeric") is None
+
+
+def test_category_monthly():
+    keys = ["2026-07", "2026-08", "2026-09"]
+    rows = [
+        {"date": "2026-08-02", "category": "Swiggy", "amount_paise": 500},
+        {"date": "2026-08-20", "category": "Swiggy", "amount_paise": 300},
+        {"date": "2026-09-01", "category": "Swiggy", "amount_paise": 200},
+        {"date": "2026-09-05", "category": "Amazon", "amount_paise": 1000},
+        {"date": "2026-06-30", "category": "Swiggy", "amount_paise": 999},  # out of range -> ignored
+        {"date": "2026-09-09", "category": None, "amount_paise": 40},        # None -> "Uncategorised"
+    ]
+    out = category_monthly(rows, keys)
+    assert out["Swiggy"]["count"] == 3
+    assert out["Swiggy"]["series"] == [0, 800, 200]      # aligned to keys, Aug summed, July 0
+    assert out["Amazon"]["series"] == [0, 0, 1000]
+    assert out["Uncategorised"]["count"] == 1 and out["Uncategorised"]["series"] == [0, 0, 40]
+    assert "Swiggy" in out and sum(out["Swiggy"]["series"]) == 1000  # the June row was excluded
+    assert category_monthly([], keys) == {}                # empty input
 
 
 if __name__ == "__main__":

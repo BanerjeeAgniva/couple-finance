@@ -107,6 +107,26 @@ def parse_receipt_total(text: str) -> int | None:
     return max(allamts) if allamts else None
 
 
+def category_monthly(rows, keys):
+    """Per-category monthly spend + transaction count over the given month keys.
+
+    rows: iterable of mappings with 'date' (ISO string), 'category', 'amount_paise'.
+    keys: ['YYYY-MM', ...] oldest->newest.
+    Returns {category: {'count': int, 'series': [paise per key]}}, series aligned to keys, 0-filled.
+    """
+    idx = {k: i for i, k in enumerate(keys)}
+    out: dict[str, dict] = {}
+    for r in rows:
+        i = idx.get((r["date"] or "")[:7])
+        if i is None:
+            continue
+        cat = r["category"] or "Uncategorised"
+        e = out.get(cat) or out.setdefault(cat, {"count": 0, "series": [0] * len(keys)})
+        e["count"] += 1
+        e["series"][i] += r["amount_paise"]
+    return out
+
+
 # ---- db --------------------------------------------------------------------
 
 class _DictCursor:
@@ -563,7 +583,8 @@ def analytics(months: int = 6):
         keys = list(reversed(keys))
         per = {k: {"month": k, "total_paise": 0, "share1_paise": 0, "share2_paise": 0} for k in keys}
         by_cat: dict[str, int] = {}
-        for r in _expense_rows(c):
+        rows = _expense_rows(c)
+        for r in rows:
             k = (r["date"] or "")[:7]
             if k not in per:
                 continue
@@ -574,9 +595,12 @@ def analytics(months: int = 6):
             per[k]["share2_paise"] += s2
             cat = r["category"] or "Uncategorised"
             by_cat[cat] = by_cat.get(cat, 0) + r["amount_paise"]
+        hist = category_monthly(rows, keys)   # per-category monthly series + count, aligned to keys
         s = c.execute("SELECT name1, name2 FROM settings WHERE id=1").fetchone()
         return {"months": [per[k] for k in keys], "name1": s["name1"], "name2": s["name2"],
-                "by_category": [{"category": k, "amount_paise": v}
+                "by_category": [{"category": k, "amount_paise": v,
+                                 "count": hist.get(k, {}).get("count", 0),
+                                 "series": hist.get(k, {}).get("series", [0] * len(keys))}
                                 for k, v in sorted(by_cat.items(), key=lambda x: -x[1])]}
 
 
