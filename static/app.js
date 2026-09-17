@@ -1,3 +1,12 @@
+// Reusable, DOM-free helpers live in ./js/*.js (imported below); this file holds
+// the view/controller code + shared UI state. Inline HTML handlers are re-exposed
+// on `window` at the bottom (this is an ES module, so top-level names aren't global).
+import { rs, rs0, toPaise, esc, mLabel, jbody, fmtDate, initial } from "./js/format.js";
+import { catIconId, catColor, catColorStyle } from "./js/categories.js";
+import { upiLink, upiInfo } from "./js/upi.js";
+import { CL_RE, noteTitle, notePreview } from "./js/notes-parse.js";
+import { sparkSvg } from "./js/chart.js";
+
 // --- helpers ---------------------------------------------------------------
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => document.querySelectorAll(s);
@@ -7,13 +16,6 @@ const api = async (url, opts) => {
   if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
   return r.headers.get("content-type")?.includes("json") ? r.json() : r;
 };
-const rs = (p) => "₹" + (p / 100).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const rs0 = (p) => "₹" + Math.round(p / 100).toLocaleString("en-IN");
-const toPaise = (r) => Math.round(parseFloat(r) * 100);
-const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-const mLabel = (k) => new Date(k + "-01T00:00").toLocaleDateString("en-IN", { month: "short" });
-const jbody = (o) => ({ method: o.method || "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(o.body) });
-const fmtDate = (iso) => { const d = new Date(iso + "T00:00"); return isNaN(d) ? iso : d.toLocaleDateString("en-IN", { day: "numeric", month: "short" }); };
 const ls = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } },
              set: (k, v) => { try { localStorage.setItem(k, v); } catch {} },
              del: (k) => { try { localStorage.removeItem(k); } catch {} } };
@@ -54,7 +56,6 @@ _mql.addEventListener("change", () => { if (!ls.get("cf_theme")) applyTheme(); }
 
 let SETTINGS = null, CONFIG = { ocr: false }, ACT_BY_ID = {};
 let CURRENT_TAB = "add", SETTINGS_DIRTY = false;
-const initial = (name, fb) => { const t = (name || "").trim(); return t ? t[0].toUpperCase() : fb; };
 const person = (p) => p === 1
   ? { n: SETTINGS.name1, cls: "chip-a", letter: initial(SETTINGS.name1, "A"), color: "var(--a)", photo: SETTINGS.avatar1 || null }
   : { n: SETTINGS.name2, cls: "chip-b", letter: initial(SETTINGS.name2, "B"), color: "var(--b)", photo: SETTINGS.avatar2 || null };
@@ -64,57 +65,6 @@ function avatarChip(p, cls = "chip", extra = "") {
   if (pr.photo) return `<span class="${cls} ${pr.cls} has-photo" style="background-image:url('${pr.photo}');${extra}"></span>`;
   return `<span class="${cls} ${pr.cls}" style="${extra}">${pr.letter}</span>`;
 }
-
-// category name -> drawn icon (keyword match, own/open-source-style SVGs in the sprite)
-const CAT_ICONS = [
-  // delivery apps first, so the brand name wins over the generic grocery/dining/shopping match
-  [["swiggy", "zomato", "food delivery", "eatsure"], "i-cat-delivery"],
-  [["blinkit", "zepto", "instamart", "pronto", "dunzo", "quick"], "i-cat-quick"],
-  [["amazon", "flipkart", "myntra", "meesho", "parcel", "courier", "delivery"], "i-cat-package"],
-  [["snabbit", "urbanclap", "urban company", "service", "salon", "repair", "plumber", "electrician", "handyman"], "i-cat-services"],
-  [["furlenco", "rentomojo", "rentmojo"], "i-cat-furniture"],  // before "rent", since these contain it
-  [["rent", "mortgage", "lease"], "i-cat-rent"],
-  [["grocer", "supermarket", "mart", "bigbasket", "zepto", "blinkit"], "i-cat-groceries"],
-  [["eat", "dining", "restaurant", "food", "swiggy", "zomato", "cafe", "dinner", "lunch"], "i-cat-dining"],
-  [["util", "electric", "power", "water", "gas", "internet", "wifi", "phone", "broadband", "bill", "trash", "clean"], "i-cat-utilities"],
-  [["travel", "flight", "plane", "hotel", "trip", "airbnb", "vacation"], "i-cat-travel"],
-  [["transport", "uber", "rapido", "ola", "taxi", "cab", "car", "fuel", "petrol", "diesel", "bus", "train", "metro", "auto", "parking"], "i-cat-transport"],
-  [["furnitur", "rental", "ikea", "sofa", "decor", "appliance", "fridge"], "i-cat-furniture"],
-  [["shop", "amazon", "flipkart", "cloth", "apparel", "shoe", "slipper"], "i-cat-shopping"],
-  [["health", "medic", "doctor", "pharma", "hospital", "medicine", "fitness", "gym"], "i-cat-health"],
-  [["movie", "game", "music", "entertain", "netflix", "spotify", "subscription", "ott"], "i-cat-fun"],
-  [["gift", "present", "donation"], "i-cat-gift"],
-  [["educat", "school", "college", "course", "tuition", "book"], "i-cat-education"],
-  [["pet", "dog"], "i-cat-pets"],
-];
-function catIconId(name) {
-  const n = (name || "").toLowerCase();
-  for (const [keys, id] of CAT_ICONS) if (keys.some((k) => n.includes(k))) return id;
-  return "i-cat-other";
-}
-// signature icon tint per delivery/company category (mid-tones legible on light + dark)
-const CAT_COLORS = [
-  [["amazon"], "#f59e0b"],
-  [["swiggy"], "#f97316"],
-  [["zomato"], "#ef4444"],
-  [["zepto"], "#8b5cf6"],
-  [["blinkit"], "#eab308"],
-  [["instamart"], "#ec4899"],
-  [["flipkart"], "#2874f0"],
-  [["pronto"], "#06b6d4"],
-  [["furlenco"], "#6366f1"],
-  [["rentomojo", "rentmojo"], "#14b8a6"],
-  [["snabbit"], "#22c55e"],
-  [["urbanclap"], "#a21caf"],
-  [["rapido"], "#facc15"],
-  [["uber"], "#64748b"],
-];
-function catColor(name) {
-  const n = (name || "").toLowerCase();
-  for (const [keys, c] of CAT_COLORS) if (keys.some((k) => n.includes(k))) return c;
-  return "";
-}
-const catColorStyle = (name) => { const c = catColor(name); return c ? ` style="color:${c}"` : ""; };
 
 const TAB_TITLE = { add: "Add expense", activity: "Activity", settle: "Settle up",
                     trends: "Trends", recurring: "Recurring", scratch: "Shared notes", settings: "Settings" };
@@ -317,10 +267,6 @@ function payAmountPaise() {
   let amt = v ? toPaise(v) : b.balance_paise;
   if (!amt || amt <= 0) amt = b.balance_paise;
   return Math.min(amt, b.balance_paise);
-}
-function upiLink(vpa, name, paise) {
-  return "upi://pay?" + new URLSearchParams(
-    { pa: vpa, pn: name, am: (paise / 100).toFixed(2), cu: "INR", tn: "Couple Finance" }).toString();
 }
 // rebuild UPI button + QR + prompt amount from the current box value
 function refreshPay() {
@@ -528,34 +474,6 @@ function buildRangeSeg() {
 // spend-history: pick a top category, chart its monthly spend (Rufus-style area/line)
 let HIST_CAT = null, HIST_DATA = null;
 
-function sparkSvg(series, months, color) {
-  const W = 340, H = 150, pL = 42, pR = 14, pT = 16, pB = 26;
-  const plotW = W - pL - pR, plotH = H - pT - pB, base = pT + plotH;
-  const n = series.length, max = Math.max(1, ...series);
-  const xAt = (i) => n <= 1 ? pL + plotW / 2 : pL + (i * plotW) / (n - 1);
-  const yAt = (v) => pT + (1 - v / max) * plotH;
-  const pts = series.map((v, i) => [xAt(i), yAt(v)]);
-  const line = pts.map((p, i) => (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join(" ");
-  const area = n <= 1 ? "" : `${line} L ${xAt(n - 1).toFixed(1)} ${base} L ${xAt(0).toFixed(1)} ${base} Z`;
-  const grid = [pT, pT + plotH / 2, base].map((y) =>
-    `<line x1="${pL}" y1="${y}" x2="${W - pR}" y2="${y}" class="spark-grid" vector-effect="non-scaling-stroke"/>`).join("");
-  const yLbls = `<text x="${pL - 6}" y="${pT + 3}" class="spark-ax" text-anchor="end">${rs0(max)}</text>
-    <text x="${pL - 6}" y="${base + 3}" class="spark-ax" text-anchor="end">₹0</text>`;
-  const step = n > 6 ? 2 : 1;
-  const xLbls = months.map((m, i) => (i % step === 0 || i === n - 1)
-    ? `<text x="${xAt(i).toFixed(1)}" y="${H - 8}" class="spark-ax" text-anchor="middle">${mLabel(m.month)}</text>` : "").join("");
-  const last = pts[n - 1], cur = rs0(series[n - 1]);
-  const dot = `<circle cx="${last[0].toFixed(1)}" cy="${last[1].toFixed(1)}" r="4" style="fill:${color}" class="spark-dot"/>`;
-  const bw = 12 + cur.length * 6.4, bx = Math.max(pL, Math.min(W - pR - bw, last[0] - bw / 2));
-  const by = last[1] < pT + 24 ? last[1] + 8 : last[1] - 25;
-  const callout = `<rect x="${bx.toFixed(1)}" y="${by.toFixed(1)}" width="${bw.toFixed(1)}" height="18" rx="6" style="fill:${color}"/>
-    <text x="${(bx + bw / 2).toFixed(1)}" y="${(by + 12.6).toFixed(1)}" class="spark-cur" text-anchor="middle">${cur}</text>`;
-  return `<svg class="spark" viewBox="0 0 ${W} ${H}" role="img" aria-label="Monthly spend chart">
-    ${grid}${yLbls}
-    ${area ? `<path d="${area}" style="fill:${color};fill-opacity:.14"/>` : ""}
-    <path d="${line}" style="stroke:${color}" class="spark-line" vector-effect="non-scaling-stroke"/>
-    ${dot}${xLbls}${callout}</svg>`;
-}
 
 function histCardHTML() {
   if (!HIST_DATA) return "";
@@ -655,17 +573,6 @@ async function delRecurring(id) {
 
 // --- notes (multiple, minimal) ---------------------------------------------
 let scratchTimer, CUR_NOTE = null, NOTES = [];
-const CL_RE = /^(\s*)- \[( |x)\]\s?(.*)$/;   // checklist line: - [ ] text  /  - [x] text
-const stripTitle = (c) => { const l = (c || "").split("\n").find((x) => x.trim()); return l ? l.trim() : ""; };
-function noteTitle(c) {
-  const t = stripTitle(c); if (!t) return "New note";
-  const m = t.match(CL_RE); return (m ? m[3] : t).slice(0, 60) || "Checklist";
-}
-function notePreview(c) {
-  return (c || "").split("\n").slice(1).map((x) => {
-    const m = x.match(CL_RE); return m ? (m[2] === "x" ? "☑ " : "☐ ") + m[3] : x.trim();
-  }).filter(Boolean).join("  ").slice(0, 80);
-}
 function showNotesList() { $("#notes-editor-view").hidden = true; $("#notes-list-view").hidden = false; }
 async function loadNotes() {
   showNotesList();
@@ -891,24 +798,6 @@ async function delCategory(id) {
 }
 
 // --- UPI ID format check (soft: recognise popular apps, warn only if malformed) ---
-const UPI_HANDLES = {
-  okhdfcbank: "Google Pay", okaxis: "Google Pay", okicici: "Google Pay", oksbi: "Google Pay", okhdfc: "Google Pay",
-  ybl: "PhonePe", ibl: "PhonePe", axl: "PhonePe",
-  paytm: "Paytm", ptaxis: "Paytm", ptsbi: "Paytm", pthdfc: "Paytm", ptyes: "Paytm", ptibl: "Paytm",
-  superyes: "super.money", super: "super.money",
-  apl: "Amazon Pay", yapl: "Amazon Pay",
-  waaxis: "WhatsApp Pay", wahdfcbank: "WhatsApp Pay", waicici: "WhatsApp Pay", wasbi: "WhatsApp Pay",
-  axisb: "CRED", ikwik: "Mobikwik", sliceaxis: "slice", fam: "FamPay", jupiteraxis: "Jupiter", naviaxis: "Navi",
-  upi: "BHIM", sbi: "SBI", hdfcbank: "HDFC Bank", icici: "ICICI Bank", axisbank: "Axis Bank",
-  yesbank: "Yes Bank", kotak: "Kotak", pnb: "PNB", idfcbank: "IDFC First", indianbank: "Indian Bank",
-};
-function upiInfo(v) {
-  v = (v || "").trim();
-  if (!v) return { state: "empty" };
-  const m = v.match(/^[a-zA-Z0-9.\-_]+@([a-zA-Z][a-zA-Z0-9.\-]{1,})$/);
-  if (!m) return { state: "bad" };
-  return { state: "ok", provider: UPI_HANDLES[m[1].toLowerCase()] || null };
-}
 function updateUpiHint(inp) {
   const hint = inp.nextElementSibling && inp.nextElementSibling.classList.contains("upi-hint") ? inp.nextElementSibling : null;
   if (!hint) return;
@@ -928,6 +817,18 @@ function exportCsv() {
   const set = $("#export-settlements").checked ? "&settlements=1" : "";
   window.location = `/api/export?days=${days}${set}`;
 }
+
+// --- expose inline-HTML handlers on window ---------------------------------
+// This file is an ES module, so its top-level names are NOT global. index.html
+// wires user actions with inline onclick/onsubmit/onchange, which resolve against
+// window — so every function referenced there must be published here.
+Object.assign(window, {
+  doLogin, goTab, addExpense, toggleCatPop, scanReceipt, setSplitAdd, copyUpi, settleUp,
+  addRecurring, renderNotesList, newNote, backToNotes, togglePin, insertChecklistItem,
+  deleteCurrentNote, saveSettings, pickAvatar, removeAvatar, onAvatarPick, addCategory,
+  setTheme, exportCsv, saveOnboarding, skipOnboarding, dismissPayPrompt, confirmPayPrompt,
+  closeEdit, saveEdit, deleteFromEdit,
+});
 
 // --- start -----------------------------------------------------------------
 applyTheme();

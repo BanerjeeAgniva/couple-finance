@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    env:
+      SECRET_KEY: ci-secret
+      APP_PASSWORD: ci-pass
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: ".python-version"
+      - run: pip install -r requirements.txt
+      - name: Unit + integration tests
+        run: |
+          python test_money.py
+          python test_app.py
+      - name: Turso smoke (only if TURSO_* secrets are set — point them at a TEST db)
+        env:
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+        run: |
+          if [ -n "$TURSO_DATABASE_URL" ]; then
+            python scripts/turso_smoke.py
+          else
+            echo "TURSO_DATABASE_URL not set — skipping Turso smoke."
+          fi
+
+  lint:
+    name: Code quality (ruff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: ".python-version"
+      - run: pip install ruff==0.6.9
+      - run: ruff check .
+
+  deploy:
+    name: Render deploy
+    needs: [test, lint]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Render deploy
+        env:
+          HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -n "$HOOK" ]; then
+            curl -fsS "$HOOK" >/dev/null && echo "Render deploy hook triggered."
+          else
+            echo "RENDER_DEPLOY_HOOK_URL not set. Render auto-deploys from main via its"
+            echo "GitHub integration, so no explicit trigger is needed. To gate deploys on"
+            echo "CI instead, add the deploy-hook secret and disable auto-deploy in Render."
+          fi

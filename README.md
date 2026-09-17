@@ -103,6 +103,62 @@ Fully responsive — the phone experience scales to a clean desktop workspace.
 
 ---
 
+## Architecture
+
+**We've used a modular monolith** — a resource-oriented (router-per-resource) FastAPI app with a
+functional core (`money.py` is pure, zero imports) and a single composition root (`app.py`). One
+deployable, split into focused modules; the FastAPI-idiomatic layout, deliberately *not* the heavier
+layered / hexagonal / clean-architecture styles that a two-user app this size doesn't need.
+
+Three clean tiers — a static **frontend**, a FastAPI **backend**, and a SQLite/Turso **database**.
+The browser only ever talks to the backend over HTTP; the backend is the only thing that touches the DB.
+
+| Tier | Lives in | What it is | Talks to |
+|------|----------|------------|----------|
+| **Frontend** | `static/` (`index.html`, `app.js`, `js/`) | Zero-framework HTML/CSS/JS, served as static files | → Backend, via `fetch` HTTP calls |
+| **Backend** | `app.py` + `routers/*` + `auth`, `money`, `config` | FastAPI app: 9 feature routers over 4 shared modules | ← Frontend · → Database |
+| **Database** | `db.py` → `couple_finance.db` **or** Turso (hosted libSQL) | Rows, balances, migrations. Same code, swaps by env var | ← Backend only |
+
+**Backend module map** — dependencies only ever point *downward*; no router imports another router, no cycles:
+
+```
+                         BROWSER  (static/ — HTML/CSS/JS frontend)
+                            │  HTTP  (fetch)
+                            ▼
+┌─────────────────────────────────────────────────────────┐
+│  app.py   — composition root (48 lines)                  │
+│  • builds FastAPI app, includes all routers              │
+│  • serves index.html + /static, runs init_db()/migrate() │
+└─────────────────────────────────────────────────────────┘
+                            │ mounts 9 routers
+      ┌──────────┬──────────┼──────────┬──────────┬─────────┐
+      ▼          ▼          ▼          ▼          ▼         ▼
+  session    settings   expenses   recurring   ledger   insights   ocr   notes   export
+  (login)   (ratio/…)  (add/list)  (rules)    (balance) (charts)  (rcpt)  (memo) (csv)
+      │          │          │          │          │         │       │       │      │
+      └──────────┴──────────┴────┬─────┴──────────┴─────────┴───────┴───────┴──────┘
+                                 │ every router leans on the same 4 modules
+             ┌───────────────────┼───────────────────┬──────────────────┐
+             ▼                   ▼                   ▼                  ▼
+        ┌─────────┐        ┌──────────┐        ┌──────────┐      ┌───────────┐
+        │  auth   │        │   db     │        │  money   │      │  config   │
+        │ token / │        │ SQLite/  │        │ PURE     │      │ constants │
+        │ require │        │ Turso    │        │ domain:  │      │ (paths,   │
+        │ _auth   │        │ rows,    │        │ split,   │      │  names,   │
+        │         │        │ balance, │        │ balance, │      │  env)     │
+        │         │        │ migrate  │        │ upi,ocr  │      │           │
+        └────┬────┘        └────┬─────┘        └──────────┘      └─────┬─────┘
+             │                  │              (no deps —              │
+             └──────────────────┴──────── depends on config ──────────┘
+                                          │
+                                          ▼
+                              DATABASE  (couple_finance.db / Turso)
+```
+
+- **`money.py`** is pure domain — zero imports of the others, so `test_money.py` tests it in isolation.
+- **`config.py`** is the leaf everything stands on.
+- The **db** tier is the same code whether it hits a local `.db` file or hosted Turso — chosen by the `TURSO_*` env vars.
+
 ## Run locally
 ```bash
 pip install -r requirements.txt
@@ -138,6 +194,33 @@ The app uses plain `sqlite3` locally and **Turso** (hosted libSQL) automatically
 See `fly.toml`: `fly launch --no-deploy`, `fly volumes create data --size 1`,
 `fly secrets set APP_PASSWORD=... SECRET_KEY=$(openssl rand -hex 32)`, `fly deploy`.
 On Fly, leave the Turso vars unset — it uses the local SQLite file on the volume.
+
+## Development
+
+```bash
+make install   # pip install -r requirements.txt
+make run       # uvicorn app:app --reload  (defaults APP_PASSWORD/SECRET_KEY)
+make test      # python test_money.py + test_app.py
+make lint      # ruff check .
+```
+
+## Continuous integration
+
+`.github/workflows/ci.yml` runs on every push and PR:
+
+- **Tests** — `test_money.py` (pure money math) and `test_app.py` (integration smoke via
+  `TestClient`, offline against a throwaway SQLite DB).
+- **Code quality** — `ruff check .` (config in `ruff.toml`).
+- **Turso smoke** — runs only when the `TURSO_DATABASE_URL` / `TURSO_AUTH_TOKEN` repo secrets are set;
+  boots the app against Turso and checks migrate + bootstrap. **Point those secrets at a throwaway
+  test database, not production.**
+- **Render deploy** — on push to `main`. Render already auto-deploys `main` via its GitHub integration;
+  the job additionally hits `RENDER_DEPLOY_HOOK_URL` if that secret is set (otherwise it no-ops).
+
+One-time manual setup (repo owner):
+1. Install the **CodeRabbit** GitHub app on the repo — config lives in `.coderabbit.yaml`.
+2. (Optional) Add repo **secrets**: `TURSO_DATABASE_URL` + `TURSO_AUTH_TOKEN` (test DB) for the Turso
+   smoke, and `RENDER_DEPLOY_HOOK_URL` if you want CI to trigger the Render deploy.
 
 ## Notes
 - All money is stored as integer **paise** — no floating-point rounding bugs.

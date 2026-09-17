@@ -1,5 +1,5 @@
-fastapi
-uvicorn[standard]
-libsql-experimental
-httpx
-python-multipart
+fastapi==0.141.1
+uvicorn[standard]==0.53.0
+libsql-experimental==0.0.55
+httpx==0.28.1
+python-multipart==0.0.32
