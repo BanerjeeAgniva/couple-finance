@@ -283,6 +283,24 @@ def check_category_budget(page):
     page.wait_for_selector("#cat-budget-hint", state="visible")
     assert "of ₹2,000" in (page.locator("#cat-budget-hint").text_content() or ""), "budget hint missing/wrong"
 
+    def add_budgeted(amount):
+        _open_add(page)
+        page.click("#cat-btn")
+        page.wait_for_selector("#cat-pop", state="visible")
+        page.locator('#cat-pop .cat-tile', has_text="Budgeted").first.click()
+        page.fill('#expense-form [name="amount"]', amount)
+        page.fill('#expense-form [name="description"]', "budget test")
+        page.click('#expense-form button[type="submit"]')
+        page.wait_for_function("document.querySelector('#expense-form [name=amount]').value === ''")
+
+    # near-limit branch: spend 80% of the ₹2,000 cap → hint turns amber
+    add_budgeted("1600")
+    page.wait_for_function("document.querySelector('#cat-budget-hint')?.classList.contains('near')")
+    # over-budget branch: push past the cap → "Over budget by ₹X"
+    add_budgeted("500")   # total ₹2,100
+    page.wait_for_function("document.querySelector('#cat-budget-hint')?.classList.contains('over')")
+    assert "Over budget by ₹100" in (page.locator("#cat-budget-hint").text_content() or ""), "over-budget text wrong"
+
 
 SEEDED_CHECKS = [
     check_boot, check_tabs, check_category_pick, check_payer_switch, check_split_custom,

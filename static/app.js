@@ -56,6 +56,7 @@ _mql.addEventListener("change", () => { if (!ls.get("cf_theme")) applyTheme(); }
 
 let SETTINGS = null, CONFIG = { ocr: false }, ACT_BY_ID = {};
 let CAT_BUDGET = {}, MONTH_SPEND = {};   // id→cap paise; category name→spent-this-month paise
+let SPEND_SEQ = 0;                       // guards against an older /api/summary response landing last
 let CURRENT_TAB = "add", SETTINGS_DIRTY = false, ACT_FILTER = "";
 const person = (p) => p === 1
   ? { n: SETTINGS.name1, cls: "chip-a", letter: initial(SETTINGS.name1, "A"), color: "var(--a)", photo: SETTINGS.avatar1 || null }
@@ -844,8 +845,10 @@ function renderBudgetHint() {
     : `${rs0(st.spent)} of ${rs0(st.cap)} this month`;
 }
 async function refreshMonthSpend() {
+  const seq = ++SPEND_SEQ;
   try {
     const sum = await api("/api/summary");
+    if (seq !== SPEND_SEQ) return;   // a newer refresh started; don't clobber with stale totals
     MONTH_SPEND = {};
     for (const r of sum.by_category) MONTH_SPEND[r.category] = r.amount_paise;
   } catch { /* nudge is best-effort; ignore */ }
@@ -854,7 +857,8 @@ async function refreshMonthSpend() {
 async function setBudget(id, rupees) {
   const paise = rupees === "" || rupees == null ? null : toPaise(rupees);
   await api("/api/categories/" + id, jbody({ method: "PUT", body: { budget_paise: paise } }));
-  await fillCategorySelects(); renderBudgetHint(); loadSettings();
+  if (paise) CAT_BUDGET[id] = paise; else delete CAT_BUDGET[id];   // update in place — don't rebuild #cat-select (would reset the Add-form category)
+  renderBudgetHint(); loadSettings();
   toast(paise ? "Budget set" : "Budget cleared");
 }
 // --- Add-form icon category picker (drives the hidden #cat-select value store) ---
