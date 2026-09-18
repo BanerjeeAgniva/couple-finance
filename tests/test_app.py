@@ -47,6 +47,19 @@ def test_expense_write_and_readback():
     assert any(r["description"] == "Test" for r in authed.get("/api/expenses").json())
 
 
+def test_category_budget():
+    authed.post("/api/categories", json={"name": "Budgeted"})
+    cid = next(c["id"] for c in authed.get("/api/categories").json() if c["name"] == "Budgeted")
+    # set a cap
+    assert authed.put(f"/api/categories/{cid}", json={"budget_paise": 500000}).json() == {"ok": True}
+    cats = {c["id"]: c for c in authed.get("/api/categories").json()}
+    assert cats[cid]["budget_paise"] == 500000
+    # empty clears it back to NULL
+    authed.put(f"/api/categories/{cid}", json={"budget_paise": ""})
+    cats = {c["id"]: c for c in authed.get("/api/categories").json()}
+    assert cats[cid]["budget_paise"] is None
+
+
 if __name__ == "__main__":
     for name, fn in sorted(globals().items()):
         if name.startswith("test_") and callable(fn):

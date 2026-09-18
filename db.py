@@ -119,6 +119,10 @@ def migrate():
                 c.execute(f"ALTER TABLE settings ADD COLUMN {col}")
             except Exception:
                 pass
+        try:  # optional monthly spend cap per category (NULL = no budget)
+            c.execute("ALTER TABLE categories ADD COLUMN budget_paise INTEGER")
+        except Exception:
+            pass
         # frequently-used delivery apps as ready-made categories (idempotent; name is UNIQUE)
         for name in ("Amazon", "Blinkit", "Instamart", "Zepto", "Swiggy", "Zomato",
                      "Flipkart", "Pronto", "Furlenco", "Rentomojo", "Snabbit", "UrbanClap",

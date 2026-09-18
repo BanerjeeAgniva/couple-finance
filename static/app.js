@@ -55,6 +55,7 @@ function setTheme(t) {
 _mql.addEventListener("change", () => { if (!ls.get("cf_theme")) applyTheme(); });
 
 let SETTINGS = null, CONFIG = { ocr: false }, ACT_BY_ID = {};
+let CAT_BUDGET = {}, MONTH_SPEND = {};   // id→cap paise; category name→spent-this-month paise
 let CURRENT_TAB = "add", SETTINGS_DIRTY = false, ACT_FILTER = "";
 const person = (p) => p === 1
   ? { n: SETTINGS.name1, cls: "chip-a", letter: initial(SETTINGS.name1, "A"), color: "var(--a)", photo: SETTINGS.avatar1 || null }
@@ -136,6 +137,7 @@ async function boot(bs) {
   $("#expense-form").date.value = new Date().toISOString().slice(0, 10);
   renderSplitStrip();
   renderBalance(bs.balance);
+  refreshMonthSpend();   // populate this-month spend for the Add-tab budget nudge
   const [tab, sub] = currentRoute();
   if (tab === "activity") ACT_FILTER = sub;
   if (TAB_TITLE[tab] && tab !== "add") selectTab(tab);
@@ -366,6 +368,7 @@ async function delSettlement(id) {
 async function addExpense(e) {
   e.preventDefault();
   const f = e.target;
+  const catId = f.category_id.value, catName = f.category_id.options[f.category_id.selectedIndex]?.text;
   await api("/api/expenses", jbody({ body: {
     description: f.description.value, amount_paise: toPaise(f.amount.value),
     category_id: +f.category_id.value, paid_by: segValue($("#paidby-seg")),
@@ -382,8 +385,13 @@ async function addExpense(e) {
   setSeg($("#paidby-seg"), ls.get("cf_last_payer") || 1);
   $("#scan-status").hidden = true;
   await loadBalance();
+  await refreshMonthSpend();
   flash(f.querySelector('button[type="submit"]'), "Added ✓");
-  toast("Expense added");
+  const st = budgetState(catId, catName);   // gentle heads-up if this pushed the category near/over its cap
+  if (st && st.pct >= 0.8)
+    toast(`${catName}: ${rs0(st.spent)} of ${rs0(st.cap)} this month${st.over ? " — over budget" : ""}`, st.over ? "err" : "ok");
+  else
+    toast("Expense added");
 }
 function flash(btn, txt) { const t = btn.textContent; btn.textContent = txt; setTimeout(() => (btn.textContent = t), 1100); }
 
@@ -755,7 +763,7 @@ async function loadSettings() {
   SETTINGS_DIRTY = false;
   const cats = await api("/api/categories");
   $("#cat-manage").innerHTML = cats.map((c) =>
-    `<span class="cat-tag"><svg class="cat-ic"${catColorStyle(c.name)}><use href="#${catIconId(c.name)}"/></svg>${esc(c.name)}<button onclick="delCategory(${c.id})" aria-label="Remove">×</button></span>`).join("");
+    `<span class="cat-tag"><svg class="cat-ic"${catColorStyle(c.name)}><use href="#${catIconId(c.name)}"/></svg>${esc(c.name)}<input class="cat-budget" type="number" min="0" step="1" inputmode="numeric" placeholder="cap ₹" value="${c.budget_paise ? Math.round(c.budget_paise / 100) : ""}" onchange="setBudget(${c.id}, this.value)" aria-label="Monthly budget for ${esc(c.name)}"><button onclick="delCategory(${c.id})" aria-label="Remove">×</button></span>`).join("");
 }
 
 // --- couple photos (avatars) -----------------------------------------------
@@ -810,10 +818,44 @@ async function saveSettings(e) {
 }
 async function fillCategorySelects(cats) {
   if (!cats) cats = await api("/api/categories");
+  CAT_BUDGET = {};
+  for (const c of cats) if (c.budget_paise) CAT_BUDGET[c.id] = c.budget_paise;
   const opts = cats.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join("");
   $("#cat-select").innerHTML = opts; $("#rec-cat").innerHTML = opts; $("#edit-cat").innerHTML = opts;
   buildCatPicker(cats);
   return cats;
+}
+// --- category budgets: optional monthly cap + quiet near-limit nudge -------
+function budgetState(id, name) {
+  const cap = CAT_BUDGET[id];
+  if (!cap) return null;
+  const spent = MONTH_SPEND[name] || 0;
+  return { cap, spent, pct: spent / cap, over: spent > cap };
+}
+function renderBudgetHint() {
+  const el = $("#cat-budget-hint"); if (!el) return;
+  const sel = $("#cat-select"), opt = sel.options[sel.selectedIndex];
+  const st = opt ? budgetState(sel.value, opt.textContent) : null;
+  if (!st) { el.hidden = true; el.textContent = ""; return; }
+  el.hidden = false;
+  el.className = "budget-hint" + (st.over ? " over" : st.pct >= 0.8 ? " near" : "");
+  el.textContent = st.over
+    ? `Over budget by ${rs0(st.spent - st.cap)} — ${rs0(st.spent)} of ${rs0(st.cap)} this month`
+    : `${rs0(st.spent)} of ${rs0(st.cap)} this month`;
+}
+async function refreshMonthSpend() {
+  try {
+    const sum = await api("/api/summary");
+    MONTH_SPEND = {};
+    for (const r of sum.by_category) MONTH_SPEND[r.category] = r.amount_paise;
+  } catch { /* nudge is best-effort; ignore */ }
+  renderBudgetHint();
+}
+async function setBudget(id, rupees) {
+  const paise = rupees === "" || rupees == null ? null : toPaise(rupees);
+  await api("/api/categories/" + id, jbody({ method: "PUT", body: { budget_paise: paise } }));
+  await fillCategorySelects(); renderBudgetHint(); loadSettings();
+  toast(paise ? "Budget set" : "Budget cleared");
 }
 // --- Add-form icon category picker (drives the hidden #cat-select value store) ---
 function buildCatPicker(cats) {
@@ -840,6 +882,7 @@ function syncCatIcon() {
   $("#cat-btn-ic").style.color = catColor(name) || "";
   $("#cat-btn").setAttribute("aria-label", name ? "Category: " + name : "Category");
   $$("#cat-pop .cat-tile").forEach((t) => t.classList.toggle("on", t.dataset.id === sel.value));
+  renderBudgetHint();
 }
 // close the category popover on an outside click
 document.addEventListener("click", (e) => {
@@ -890,6 +933,7 @@ Object.assign(window, {
   closeEdit, saveEdit, deleteFromEdit, setActFilter,
   // handlers embedded in JS-rendered markup
   pickCat, openNote, openEdit, toggleChecklist, delCategory, delRecurring, delSettlement,
+  setBudget,
 });
 
 // --- start -----------------------------------------------------------------
