@@ -39,6 +39,8 @@ other — and the whole ledger re-reasons instantly.
 - **Per-expense override** — send one expense 50/50 or fully custom without touching the global ratio.
 - **Recurring** — rent/wifi/etc. auto-posted each month to the right payer.
 - **Trends** — monthly spend by person, per-person totals, per-category breakdown.
+- **Insights** — ranked, couple-friendly cards (settle nudge, category spikes, month-end forecast, recurring suggestions) — pure math on your data, no LLM.
+- **Category budgets** — an optional monthly cap per category, with a quiet near/over-limit nudge as you add.
 - **Filter by category** — zoom the activity feed to one category (count + total), deep-linked at `#activity/<category>`.
 - **Shared notes & checklists**, **profile photos**, dark mode, and **CSV export**.
 
@@ -108,7 +110,22 @@ Fully responsive — the phone experience scales to a clean desktop workspace.
 Filter the activity feed to a single category — the dropdown shows a running **count and total** for
 just that category, and the view deep-links to `#activity/<category>`, so a filtered feed is bookmarkable
 and shareable.
-<!-- screenshot pending: screenshots/13-activity-filter.png — capture against the live site after deploy -->
+![Activity category filter](screenshots/13-activity-filter.png)
+
+### 14 · Insights that read your ledger for you
+The Trends tab opens with ranked, couple-friendly cards — computed as pure math on your own data
+(no LLM, no network): a settle-up nudge, category spikes, a month-end forecast, recurring suggestions,
+and the occasional teamwork win. Tap one to jump straight to the thing it's about.
+![Insights](screenshots/14-insights.png)
+
+### 15 · Set a monthly cap per category
+Give any category an optional monthly budget right in Settings — leave it blank for no cap.
+![Category budgets](screenshots/15-budget-caps.png)
+
+### 16 · A quiet nudge before you overspend
+As you add an expense, the picked category shows where it stands against its cap this month —
+gently near the limit, or clearly over.
+![Budget nudge](screenshots/16-budget-nudge.png)
 
 ---
 
