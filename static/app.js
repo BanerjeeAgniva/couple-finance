@@ -106,7 +106,9 @@ const goTab = selectTab;
 // hash is "tab" or "activity/<category>" — split off the optional category filter
 function currentRoute() {
   const raw = location.hash.slice(1), i = raw.indexOf("/");
-  return i === -1 ? [raw, ""] : [raw.slice(0, i), decodeURIComponent(raw.slice(i + 1))];
+  if (i === -1) return [raw, ""];
+  try { return [raw.slice(0, i), decodeURIComponent(raw.slice(i + 1))]; }
+  catch { return [raw.slice(0, i), ""]; }   // malformed escape (e.g. #activity/%) → no filter
 }
 window.addEventListener("hashchange", () => {
   const [tab, sub] = currentRoute();
@@ -409,7 +411,12 @@ async function loadActivity() {
   ACT_BY_ID = {};
   items.forEach((x) => { if (x.type === "expense") ACT_BY_ID[x.id] = x; });
   const cats = [...new Set(items.filter((x) => x.type === "expense" && x.category).map((x) => x.category))].sort();
-  if (ACT_FILTER && !cats.includes(ACT_FILTER)) ACT_FILTER = "";   // category gone → fall back to All
+  if (ACT_FILTER && !cats.includes(ACT_FILTER)) {   // category gone → fall back to All, and drop it from the URL
+    const stale = ACT_FILTER;
+    ACT_FILTER = "";
+    if (CURRENT_TAB === "activity" && location.hash.slice(1) === "activity/" + encodeURIComponent(stale))
+      history.replaceState(null, "", "#activity");
+  }
   const shown = ACT_FILTER ? items.filter((x) => x.category === ACT_FILTER) : items;
   const opts = ['<option value="">All categories</option>',
     ...cats.map((c) => `<option value="${esc(c)}"${c === ACT_FILTER ? " selected" : ""}>${esc(c)}</option>`)].join("");
