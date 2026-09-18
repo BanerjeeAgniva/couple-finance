@@ -410,6 +410,12 @@ select { appearance: none; background-image: url("data:image/svg+xml;utf8,<svg x
 .scan-status.ok { background: var(--a-soft); color: var(--a-ink); }
 .scan-status.err { background: var(--b-soft); color: var(--b-ink); }
 
+/* category budget: quiet monthly-cap nudge on the Add form */
+.budget-hint { font-size: 12.5px; color: var(--muted); margin: 2px 0; }
+.budget-hint.near { color: var(--b-ink); font-weight: 500; }
+.budget-hint.over { background: var(--b-soft); color: var(--b-ink); font-weight: 600; padding: 7px 11px; border-radius: var(--r-sm); }
+.cat-tag .cat-budget { width: 66px; font-size: 12.5px; padding: 3px 6px; border-radius: var(--r-sm); border: 1px solid var(--line); background: var(--card); color: var(--ink); }
+
 .segmented-sm .seg-opt { padding: 7px 8px; font-size: 13px; }
 .ov-quick {
   cursor: pointer; font-size: 12px; color: var(--a-ink); background: var(--a-soft);

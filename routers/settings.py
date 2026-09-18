@@ -48,6 +48,18 @@ async def add_category(request: Request):
     return {"ok": True}
 
 
+@router.put("/api/categories/{cid}")
+async def set_category_budget(cid: int, request: Request):
+    b = await request.json()
+    raw = b.get("budget_paise")
+    cap = int(raw) if raw not in (None, "", 0, "0") else None  # 0/empty clears the cap
+    if cap is not None and cap < 0:
+        cap = None
+    with db() as c:
+        c.execute("UPDATE categories SET budget_paise=? WHERE id=?", (cap, cid))
+    return {"ok": True}
+
+
 @router.delete("/api/categories/{cid}")
 def del_category(cid: int):
     with db() as c:

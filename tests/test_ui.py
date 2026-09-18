@@ -261,10 +261,51 @@ def check_settings(page):
     assert dl.value.suggested_filename.endswith(".csv"), "export did not download a CSV"
 
 
+def check_category_budget(page):
+    """Set a monthly cap on a category in Settings; the Add-tab picker then shows the nudge."""
+    page.click('.tab-btn[data-tab="settings"]')
+    page.wait_for_selector("#settings-form", state="visible")
+    page.fill('.add-inline [name="name"]', "Budgeted")
+    page.click('.add-inline button[type="submit"]')          # addCategory
+    chip = page.locator('#cat-manage .cat-tag', has_text="Budgeted")
+    chip.wait_for(state="visible")
+    inp = chip.locator(".cat-budget")
+    inp.fill("2000")
+    inp.dispatch_event("change")                             # setBudget → PUT /api/categories/{id}
+    page.wait_for_selector("#toasts .toast", state="visible")
+    # cap round-trips through the settings re-render
+    assert page.locator('#cat-manage .cat-tag', has_text="Budgeted").locator(".cat-budget").input_value() == "2000"
+    # Add tab: picking the budgeted category surfaces the quiet hint
+    _open_add(page)
+    page.click("#cat-btn")
+    page.wait_for_selector("#cat-pop", state="visible")
+    page.locator('#cat-pop .cat-tile', has_text="Budgeted").first.click()
+    page.wait_for_selector("#cat-budget-hint", state="visible")
+    assert "of ₹2,000" in (page.locator("#cat-budget-hint").text_content() or ""), "budget hint missing/wrong"
+
+    def add_budgeted(amount):
+        _open_add(page)
+        page.click("#cat-btn")
+        page.wait_for_selector("#cat-pop", state="visible")
+        page.locator('#cat-pop .cat-tile', has_text="Budgeted").first.click()
+        page.fill('#expense-form [name="amount"]', amount)
+        page.fill('#expense-form [name="description"]', "budget test")
+        page.click('#expense-form button[type="submit"]')
+        page.wait_for_function("document.querySelector('#expense-form [name=amount]').value === ''")
+
+    # near-limit branch: spend 80% of the ₹2,000 cap → hint turns amber
+    add_budgeted("1600")
+    page.wait_for_function("document.querySelector('#cat-budget-hint')?.classList.contains('near')")
+    # over-budget branch: push past the cap → "Over budget by ₹X"
+    add_budgeted("500")   # total ₹2,100
+    page.wait_for_function("document.querySelector('#cat-budget-hint')?.classList.contains('over')")
+    assert "Over budget by ₹100" in (page.locator("#cat-budget-hint").text_content() or ""), "over-budget text wrong"
+
+
 SEEDED_CHECKS = [
     check_boot, check_tabs, check_category_pick, check_payer_switch, check_split_custom,
     check_add_expense, check_edit_and_delete, check_settle, check_trends, check_recurring,
-    check_notes, check_settings,
+    check_notes, check_settings, check_category_budget,
 ]
 
 
