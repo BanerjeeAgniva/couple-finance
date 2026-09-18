@@ -544,9 +544,21 @@ function wireHistPills() {
   });
 }
 
+function insightCardHTML(i) {
+  const tap = i.action ? ` role="button" tabindex="0" onclick="location.hash='${i.action}'"` : "";
+  return `<div class="insight sev-${esc(i.severity)}${i.action ? " insight-tap" : ""}"${tap}>
+    <div class="insight-title">${esc(i.title)}</div>
+    <div class="insight-detail">${esc(i.detail)}</div></div>`;
+}
+
 async function loadTrends() {
-  const d = await api("/api/analytics?months=" + RANGE);
+  const [d, ins] = await Promise.all([
+    api("/api/analytics?months=" + RANGE),
+    api("/api/insights").catch(() => ({ insights: [] })),   // insights are a bonus, never block trends
+  ]);
   HIST_DATA = { cats: d.by_category, months: d.months };
+  const insightsHTML = (ins.insights || []).length
+    ? `<div class="insights">${ins.insights.map(insightCardHTML).join("")}</div>` : "";
   const maxM = Math.max(1, ...d.months.map((m) => m.total_paise));
   const totalRange = d.months.reduce((s, m) => s + m.total_paise, 0);
   const sum1 = d.months.reduce((s, m) => s + m.share1_paise, 0);
@@ -569,6 +581,7 @@ async function loadTrends() {
       <span class="val">${rs0(c.amount_paise)}</span></div>`).join("");
 
   $("#trends-box").innerHTML = `
+    ${insightsHTML}
     <div class="totals-total">
       <div class="lbl">Spent over ${RANGE} months</div>
       <div class="big num">${rs0(totalRange)}</div>

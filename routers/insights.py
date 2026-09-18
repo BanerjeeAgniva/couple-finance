@@ -1,10 +1,12 @@
-"""Read-only analytics: monthly summary, merged activity feed, multi-month trends."""
+"""Read-only analytics: monthly summary, merged activity feed, multi-month trends, insights."""
+from calendar import monthrange
 from datetime import date
 
 from fastapi import APIRouter, Depends
 
 from auth import require_auth
-from db import db, expense_rows, global_ratio, post_due_recurring
+from db import balance_payload, db, expense_rows, global_ratio, post_due_recurring
+from insights_engine import build_insights
 from money import category_monthly, resolve_ratio, split
 
 router = APIRouter(dependencies=[Depends(require_auth)])
@@ -86,3 +88,40 @@ def analytics(months: int = 6):
                                  "count": hist.get(k, {}).get("count", 0),
                                  "series": hist.get(k, {}).get("series", [0] * len(keys))}
                                 for k, v in sorted(by_cat.items(), key=lambda x: -x[1])]}
+
+
+@router.get("/api/insights")
+def insights():
+    """Ranked, couple-friendly insight cards — pure math on the existing analytics.
+    No LLM, no network: instant, free, and financial data never leaves the server."""
+    a = analytics(months=6)   # reuse the month/category series computation
+    today = date.today()
+    with db() as c:
+        raw = balance_payload(c)["raw"]
+        srow = c.execute("SELECT MAX(date) AS d FROM settlements").fetchone()
+        weeks = None
+        if srow and srow["d"]:
+            weeks = max(0, (today - date.fromisoformat(srow["d"][:10])).days // 7)
+        # descriptions logged in >=3 distinct recent months that aren't recurring rules yet
+        existing = {(r["description"] or "").strip().lower()
+                    for r in c.execute("SELECT description FROM recurring")}
+        rows = c.execute(
+            "SELECT description, COUNT(DISTINCT substr(date,1,7)) AS m FROM expenses "
+            "WHERE date >= date('now','-6 months') AND TRIM(description) <> '' "
+            "GROUP BY LOWER(TRIM(description))"
+        ).fetchall()
+        candidates = [{"desc": r["description"], "months": r["m"]}
+                      for r in rows if r["m"] >= 3
+                      and (r["description"] or "").strip().lower() not in existing]
+    data = {
+        "keys": [m["month"] for m in a["months"]],
+        "month_totals": [m["total_paise"] for m in a["months"]],
+        "categories": [{"category": x["category"], "series": x["series"]} for x in a["by_category"]],
+        "current_day": today.day,
+        "days_in_month": monthrange(today.year, today.month)[1],
+        "balance_raw": raw,
+        "name1": a["name1"], "name2": a["name2"],
+        "weeks_since_settle": weeks,
+        "recurring_candidates": candidates,
+    }
+    return {"insights": build_insights(data)}
