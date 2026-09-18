@@ -5,7 +5,7 @@ import sqlite3
 from datetime import date, datetime
 
 import config
-from money import compute_balance, upi_link
+from money import category_monthly, compute_balance, resolve_ratio, split, upi_link
 
 
 class _DictCursor:
@@ -195,3 +195,64 @@ def balance_payload(c):
         if vpa:
             pay = {"vpa": vpa, "name": name, "link": upi_link(vpa, name, abs(bal))}
     return {"balance_paise": abs(bal), "message": msg, "raw": bal, "pay": pay}
+
+
+def month_keys(n: int) -> list[str]:
+    """The last n 'YYYY-MM' keys, oldest -> newest, ending with the current month."""
+    y, m, keys = date.today().year, date.today().month, []
+    for _ in range(max(1, min(n, 24))):
+        keys.append(f"{y:04d}-{m:02d}")
+        m -= 1
+        if m == 0:
+            m, y = 12, y - 1
+    return list(reversed(keys))
+
+
+def analytics_data(c, months: int = 6):
+    """Read-only per-month totals + per-person shares + per-category monthly series.
+    No writes — safe to run concurrently with other reads (recurring is posted by the
+    /api/analytics route, not here)."""
+    g1, g2 = global_ratio(c)
+    keys = month_keys(months)
+    per = {k: {"month": k, "total_paise": 0, "share1_paise": 0, "share2_paise": 0} for k in keys}
+    by_cat: dict[str, int] = {}
+    rows = expense_rows(c)
+    for r in rows:
+        if (r["date"] or "")[:7] not in per:
+            continue
+        k = r["date"][:7]
+        r1, r2 = resolve_ratio(r["override_r1"], r["override_r2"], g1, g2)
+        s1, s2 = split(r["amount_paise"], r1, r2)
+        per[k]["total_paise"] += r["amount_paise"]
+        per[k]["share1_paise"] += s1
+        per[k]["share2_paise"] += s2
+        cat = r["category"] or "Uncategorised"
+        by_cat[cat] = by_cat.get(cat, 0) + r["amount_paise"]
+    hist = category_monthly(rows, keys)
+    s = c.execute("SELECT name1, name2 FROM settings WHERE id=1").fetchone()
+    return {"months": [per[k] for k in keys], "name1": s["name1"], "name2": s["name2"],
+            "by_category": [{"category": k, "amount_paise": v,
+                             "count": hist.get(k, {}).get("count", 0),
+                             "series": hist.get(k, {}).get("series", [0] * len(keys))}
+                            for k, v in sorted(by_cat.items(), key=lambda x: -x[1])]}
+
+
+def weeks_since_last_settlement(c) -> int | None:
+    row = c.execute("SELECT MAX(date) AS d FROM settlements").fetchone()
+    if not row or not row["d"]:
+        return None
+    return max(0, (date.today() - date.fromisoformat(row["d"][:10])).days // 7)
+
+
+def recurring_candidates(c, min_months: int = 3) -> list[dict]:
+    """Descriptions logged in >= min_months distinct recent months that aren't recurring rules yet."""
+    existing = {(r["description"] or "").strip().lower()
+                for r in c.execute("SELECT description FROM recurring")}
+    rows = c.execute(
+        "SELECT description, COUNT(DISTINCT substr(date,1,7)) AS m FROM expenses "
+        "WHERE date >= date('now','-6 months') AND TRIM(description) <> '' "
+        "GROUP BY LOWER(TRIM(description))"
+    ).fetchall()
+    return [{"desc": r["description"], "months": r["m"]}
+            for r in rows if r["m"] >= min_months
+            and (r["description"] or "").strip().lower() not in existing]

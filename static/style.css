@@ -276,6 +276,7 @@ select { appearance: none; background-image: url("data:image/svg+xml;utf8,<svg x
 
 /* ===== insight cards (Trends) ============================================= */
 .insights { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+.insights:empty { display: none; }   /* reserved container adds no gap until insights load */
 .insight { background: var(--card); border: 1px solid var(--line);
   border-radius: var(--r); padding: 12px 15px; box-shadow: var(--shadow-sm); }
 .insight-title { font-weight: 600; font-size: 14.5px; }
