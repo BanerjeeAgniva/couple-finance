@@ -55,7 +55,7 @@ function setTheme(t) {
 _mql.addEventListener("change", () => { if (!ls.get("cf_theme")) applyTheme(); });
 
 let SETTINGS = null, CONFIG = { ocr: false }, ACT_BY_ID = {};
-let CURRENT_TAB = "add", SETTINGS_DIRTY = false;
+let CURRENT_TAB = "add", SETTINGS_DIRTY = false, ACT_FILTER = "";
 const person = (p) => p === 1
   ? { n: SETTINGS.name1, cls: "chip-a", letter: initial(SETTINGS.name1, "A"), color: "var(--a)", photo: SETTINGS.avatar1 || null }
   : { n: SETTINGS.name2, cls: "chip-b", letter: initial(SETTINGS.name2, "B"), color: "var(--b)", photo: SETTINGS.avatar2 || null };
@@ -96,13 +96,26 @@ function selectTab(name) {
   $$(".tab-btn").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
   $$(".tab").forEach((t) => t.hidden = t.id !== "tab-" + name);
   $("#topbar-title").textContent = TAB_TITLE[name] || "";
-  if (location.hash.slice(1) !== name) history.replaceState(null, "", "#" + name);
+  const wantHash = name === "activity" && ACT_FILTER ? "activity/" + encodeURIComponent(ACT_FILTER) : name;
+  if (location.hash.slice(1) !== wantHash) history.replaceState(null, "", "#" + wantHash);
   $(".scroll").scrollTop = 0;
   ({ activity: loadActivity, settle: loadSettle, trends: loadTrends, recurring: loadRecurring,
      scratch: loadNotes, settings: loadSettings }[name] || (() => {}))();
 }
 const goTab = selectTab;
-window.addEventListener("hashchange", () => { const h = location.hash.slice(1); if (TAB_TITLE[h]) selectTab(h); });
+// hash is "tab" or "activity/<category>" — split off the optional category filter
+function currentRoute() {
+  const raw = location.hash.slice(1), i = raw.indexOf("/");
+  if (i === -1) return [raw, ""];
+  try { return [raw.slice(0, i), decodeURIComponent(raw.slice(i + 1))]; }
+  catch { return [raw.slice(0, i), ""]; }   // malformed escape (e.g. #activity/%) → no filter
+}
+window.addEventListener("hashchange", () => {
+  const [tab, sub] = currentRoute();
+  if (!TAB_TITLE[tab]) return;
+  if (tab === "activity") ACT_FILTER = sub;
+  selectTab(tab);
+});
 
 // --- boot ------------------------------------------------------------------
 async function boot(bs) {
@@ -123,8 +136,9 @@ async function boot(bs) {
   $("#expense-form").date.value = new Date().toISOString().slice(0, 10);
   renderSplitStrip();
   renderBalance(bs.balance);
-  const h = location.hash.slice(1);
-  if (h && TAB_TITLE[h] && h !== "add") selectTab(h);
+  const [tab, sub] = currentRoute();
+  if (tab === "activity") ACT_FILTER = sub;
+  if (TAB_TITLE[tab] && tab !== "add") selectTab(tab);
   // first-run: ledger still on seed defaults → guide setup (server-driven, so partner B won't re-see it)
   const fresh = SETTINGS.name1 === "Person 1" && SETTINGS.name2 === "Person 2";
   if (fresh && !ls.get("cf_onb_skip")) showOnboarding(); else $("#onboarding").hidden = true;
@@ -396,9 +410,35 @@ async function loadActivity() {
   const items = await api("/api/activity?days=120");
   ACT_BY_ID = {};
   items.forEach((x) => { if (x.type === "expense") ACT_BY_ID[x.id] = x; });
-  $("#activity-list").innerHTML = items.length
-    ? items.map((x) => x.type === "settlement" ? settlementRow(x) : expenseRow(x)).join("")
-    : emptyState("activity", "No expenses yet", "Everything you both spend shows up here, split automatically by your income ratio.", "goTab('add')");
+  const cats = [...new Set(items.filter((x) => x.type === "expense" && x.category).map((x) => x.category))].sort();
+  if (ACT_FILTER && !cats.includes(ACT_FILTER)) {   // category gone → fall back to All, and drop it from the URL
+    const stale = ACT_FILTER;
+    ACT_FILTER = "";
+    if (CURRENT_TAB === "activity" && location.hash.slice(1) === "activity/" + encodeURIComponent(stale))
+      history.replaceState(null, "", "#activity");
+  }
+  const shown = ACT_FILTER ? items.filter((x) => x.category === ACT_FILTER) : items;
+  const opts = ['<option value="">All categories</option>',
+    ...cats.map((c) => `<option value="${esc(c)}"${c === ACT_FILTER ? " selected" : ""}>${esc(c)}</option>`)].join("");
+  const tot = shown.reduce((s, x) => s + (x.amount_paise || 0), 0);
+  $("#act-filterbar").innerHTML = `<label class="act-filter">
+      <svg class="cat-ic"${catColorStyle(ACT_FILTER)}><use href="#${ACT_FILTER ? catIconId(ACT_FILTER) : "i-cat-other"}"/></svg>
+      <select id="act-cat" aria-label="Filter by category" onchange="setActFilter(this.value)">${opts}</select>
+    </label>${ACT_FILTER ? `<span class="act-sum">${shown.length} · ${rs0(tot)}</span>` : ""}`;
+  $("#activity-list").innerHTML = shown.length
+    ? shown.map((x) => x.type === "settlement" ? settlementRow(x) : expenseRow(x)).join("")
+    : emptyState("activity",
+        ACT_FILTER ? `No ${esc(ACT_FILTER)} spends` : "No expenses yet",
+        ACT_FILTER ? "Nothing logged in this category yet." : "Everything you both spend shows up here, split automatically by your income ratio.",
+        ACT_FILTER ? "setActFilter('')" : "goTab('add')",
+        ACT_FILTER ? "Show all" : "Add your first expense");
+}
+// filter the feed by category; drives the #activity/<category> route
+function setActFilter(cat) {
+  ACT_FILTER = cat || "";
+  const want = ACT_FILTER ? "activity/" + encodeURIComponent(ACT_FILTER) : "activity";
+  if (location.hash.slice(1) !== want) history.replaceState(null, "", "#" + want);
+  loadActivity();
 }
 function expenseRow(x) {
   const to = x.paid_to ? ` · <span class="tag">→ ${esc(x.paid_to)}</span>` : "";
@@ -829,7 +869,7 @@ Object.assign(window, {
   addRecurring, renderNotesList, newNote, backToNotes, togglePin, insertChecklistItem,
   deleteCurrentNote, saveSettings, pickAvatar, removeAvatar, onAvatarPick, addCategory,
   setTheme, exportCsv, saveOnboarding, skipOnboarding, dismissPayPrompt, confirmPayPrompt,
-  closeEdit, saveEdit, deleteFromEdit,
+  closeEdit, saveEdit, deleteFromEdit, setActFilter,
   // handlers embedded in JS-rendered markup
   pickCat, openNote, openEdit, toggleChecklist, delCategory, delRecurring, delSettlement,
 });
