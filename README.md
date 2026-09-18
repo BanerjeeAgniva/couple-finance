@@ -39,6 +39,7 @@ other — and the whole ledger re-reasons instantly.
 - **Per-expense override** — send one expense 50/50 or fully custom without touching the global ratio.
 - **Recurring** — rent/wifi/etc. auto-posted each month to the right payer.
 - **Trends** — monthly spend by person, per-person totals, per-category breakdown.
+- **Filter by category** — zoom the activity feed to one category (count + total), deep-linked at `#activity/<category>`.
 - **Shared notes & checklists**, **profile photos**, dark mode, and **CSV export**.
 
 ---
@@ -102,6 +103,12 @@ Names, incomes (the ratio), UPI IDs with live validation, profile photos, catego
 ### 12 · Same app, bigger screen
 Fully responsive — the phone experience scales to a clean desktop workspace.
 ![Desktop](screenshots/12-desktop.png)
+
+### 13 · Zoom into one category
+Filter the activity feed to a single category — the dropdown shows a running **count and total** for
+just that category, and the view deep-links to `#activity/<category>`, so a filtered feed is bookmarkable
+and shareable.
+<!-- screenshot pending: screenshots/13-activity-filter.png — capture against the live site after deploy -->
 
 ---
 
