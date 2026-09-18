@@ -7,9 +7,9 @@ layer, so the schema always matches production via db.init_db()/migrate().
 
 Usage:
     python scripts/seed_demo.py                 # writes ./demo.db (overwrites)
-    DB_PATH=/tmp/shots.db python scripts/seed_demo.py
-    # then run the app against the same DB and screenshot:
-    APP_PASSWORD=demo DB_PATH=demo.db uvicorn app:app --reload
+    DB_PATH=/tmp/shots.db SEED_OVERWRITE=1 python scripts/seed_demo.py   # non-demo path needs opt-in
+    # then run the app against the same DB and screenshot (env -u keeps prod Turso out of the loop):
+    env -u TURSO_DATABASE_URL -u TURSO_AUTH_TOKEN APP_PASSWORD=demo DB_PATH=demo.db uvicorn app:app --reload
 """
 import os
 import sys
@@ -71,7 +71,14 @@ def cat_ids(c):
 
 def main():
     path = Path(config.DB_PATH)
+    # Guard the delete: only auto-wipe the default demo.db. A custom DB_PATH could point at a
+    # real database, so require SEED_OVERWRITE=1 before unlinking anything else.
     if path.exists():
+        if path.name != "demo.db" and os.environ.get("SEED_OVERWRITE") != "1":
+            raise SystemExit(
+                f"Refusing to delete existing {path} (not demo.db). "
+                f"Re-run with SEED_OVERWRITE=1 to overwrite it."
+            )
         path.unlink()  # fresh, reproducible screenshots every run
     db.init_db()
     db.migrate()  # adds upi/avatar cols + the delivery-app categories used below
@@ -96,7 +103,8 @@ def main():
     total = sum(r for _, _, r, _, _ in EXPENSES)
     print(f"Seeded {len(EXPENSES)} expenses (₹{total:,}) across "
           f"{len({e[3] for e in EXPENSES})} categories into {path}")
-    print(f"Run:  APP_PASSWORD=demo DB_PATH={path} uvicorn app:app --reload")
+    print(f"Run:  env -u TURSO_DATABASE_URL -u TURSO_AUTH_TOKEN "
+          f"APP_PASSWORD=demo DB_PATH={path} uvicorn app:app --reload")
 
 
 if __name__ == "__main__":
