@@ -544,6 +544,18 @@ function wireHistPills() {
   });
 }
 
+function insightCardHTML(i) {
+  // actionable cards work by pointer AND keyboard (Enter/Space), and Space must not scroll
+  const nav = `location.hash='${i.action}'`;
+  const tap = i.action
+    ? ` role="button" tabindex="0" onclick="${nav}"`
+      + ` onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();${nav}}"`
+    : "";
+  return `<div class="insight sev-${esc(i.severity)}${i.action ? " insight-tap" : ""}"${tap}>
+    <div class="insight-title"><span class="insight-dot"></span>${esc(i.title)}</div>
+    <div class="insight-detail">${esc(i.detail)}</div></div>`;
+}
+
 async function loadTrends() {
   const d = await api("/api/analytics?months=" + RANGE);
   HIST_DATA = { cats: d.by_category, months: d.months };
@@ -569,6 +581,7 @@ async function loadTrends() {
       <span class="val">${rs0(c.amount_paise)}</span></div>`).join("");
 
   $("#trends-box").innerHTML = `
+    <div id="insights-box" class="insights"></div>
     <div class="totals-total">
       <div class="lbl">Spent over ${RANGE} months</div>
       <div class="big num">${rs0(totalRange)}</div>
@@ -584,6 +597,11 @@ async function loadTrends() {
     ${histCardHTML()}
     <div class="cat-block">${cats || emptyState("trends", "No spending yet", "Once you log expenses they'll chart here by month, person, and category.", "goTab('add')")}</div>`;
   wireHistPills();
+  // insights load after the charts are on screen and never block them
+  api("/api/insights").then((ins) => {
+    const box = $("#insights-box");
+    if (box && CURRENT_TAB === "trends") box.innerHTML = (ins.insights || []).map(insightCardHTML).join("");
+  }).catch(() => {});   // insights are a bonus — a failure leaves the charts untouched
 }
 
 // --- recurring -------------------------------------------------------------

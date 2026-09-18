@@ -11,6 +11,7 @@ run:
 
 test:
 	python -m tests.test_money
+	python -m tests.test_insights_engine
 	python -m tests.test_app
 	python -m tests.test_handlers
 
