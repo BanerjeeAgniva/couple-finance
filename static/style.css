@@ -276,13 +276,16 @@ select { appearance: none; background-image: url("data:image/svg+xml;utf8,<svg x
 
 /* ===== insight cards (Trends) ============================================= */
 .insights { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
-.insight { background: var(--card); border: 1px solid var(--line); border-left: 3px solid var(--line);
+.insight { background: var(--card); border: 1px solid var(--line);
   border-radius: var(--r); padding: 12px 15px; box-shadow: var(--shadow-sm); }
 .insight-title { font-weight: 600; font-size: 14.5px; }
 .insight-detail { color: var(--muted); font-size: 13px; margin-top: 3px; }
-.insight.sev-alert { border-left-color: #e0533d; }
-.insight.sev-suggest { border-left-color: var(--a); }
-.insight.sev-win { border-left-color: #22c55e; }
+/* severity reads from a small dot (matching .leg-dot), not a colored side border */
+.insight-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+  margin-right: 8px; vertical-align: middle; background: var(--faint); }
+.sev-alert .insight-dot { background: #e0533d; }
+.sev-suggest .insight-dot { background: var(--a); }
+.sev-win .insight-dot { background: #22c55e; }
 .insight-tap { cursor: pointer; }
 .insight-tap:hover { background: var(--ground); border-color: var(--a); }
 .insight-tap:focus-visible { outline: none; border-color: var(--a); box-shadow: 0 0 0 3px var(--a-soft); }

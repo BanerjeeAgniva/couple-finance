@@ -547,7 +547,7 @@ function wireHistPills() {
 function insightCardHTML(i) {
   const tap = i.action ? ` role="button" tabindex="0" onclick="location.hash='${i.action}'"` : "";
   return `<div class="insight sev-${esc(i.severity)}${i.action ? " insight-tap" : ""}"${tap}>
-    <div class="insight-title">${esc(i.title)}</div>
+    <div class="insight-title"><span class="insight-dot"></span>${esc(i.title)}</div>
     <div class="insight-detail">${esc(i.detail)}</div></div>`;
 }
 
