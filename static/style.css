@@ -606,6 +606,13 @@ select { appearance: none; background-image: url("data:image/svg+xml;utf8,<svg x
 .split-lbl { font-size: 12.5px; color: var(--muted); font-weight: 500; }
 .split-row select { width: auto; padding: 8px 34px 8px 12px; font-size: 14px; }
 
+/* ===== activity: category filter ========================================== */
+.act-filterbar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.act-filter { position: relative; display: inline-flex; align-items: center; }
+.act-filter .cat-ic { position: absolute; left: 11px; width: 16px; height: 16px; margin: 0; pointer-events: none; }
+.act-filter select { width: auto; padding: 8px 34px 8px 34px; font-size: 14px; }
+.act-sum { font-size: 13px; color: var(--muted); font-weight: 500; }
+
 /* ===== toasts ============================================================= */
 .toasts { position: fixed; left: 0; right: 0; bottom: calc(18px + var(--safe-b)); z-index: 80;
   display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 0 16px; pointer-events: none; }
