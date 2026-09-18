@@ -2,6 +2,7 @@
 import os
 os.environ["DB_PATH"] = "/tmp/couple_test.db"  # keep import-time init_db off the real db
 from app import split, resolve_ratio, compute_balance, upi_link, parse_receipt_total, category_monthly
+from hypothesis import given, strategies as st
 
 
 def test_split_sums_exactly():
@@ -79,6 +80,34 @@ def test_category_monthly():
     assert out["Uncategorised"]["count"] == 1 and out["Uncategorised"]["series"] == [0, 0, 40]
     assert "Swiggy" in out and sum(out["Swiggy"]["series"]) == 1000  # the June row was excluded
     assert category_monthly([], keys) == {}                # empty input
+
+
+# --- property-based tests (Hypothesis) — invariants over generated inputs -----
+
+@given(amt=st.integers(min_value=0, max_value=10**12),
+       r1=st.integers(min_value=1, max_value=10**6),
+       r2=st.integers(min_value=1, max_value=10**6))
+def test_split_always_sums_and_nonneg(amt, r1, r2):
+    s1, s2 = split(amt, r1, r2)
+    assert s1 + s2 == amt          # no paisa created or lost
+    assert s1 >= 0 and s2 >= 0
+
+
+@given(amt=st.integers(min_value=1, max_value=10**10),
+       r1=st.integers(min_value=1, max_value=1000),
+       r2=st.integers(min_value=1, max_value=1000))
+def test_paying_back_the_balance_settles(amt, r1, r2):
+    # person 1 pays an expense; person 2 pays back exactly the owed balance -> square
+    bal = compute_balance([(amt, 1, None, None)], [], r1, r2)
+    assert compute_balance([(amt, 1, None, None)], [(bal, 2, 1)], r1, r2) == 0
+
+
+@given(vpa=st.text(min_size=1, max_size=20, alphabet="abcdefghijklmnop"),
+       paise=st.integers(min_value=1, max_value=10**9))
+def test_upi_link_shape(vpa, paise):
+    link = upi_link(vpa + "@okhdfcbank", "Name", paise)
+    assert link.startswith("upi://pay?")
+    assert "cu=INR" in link and f"am={paise/100:.2f}" in link
 
 
 if __name__ == "__main__":
