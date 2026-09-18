@@ -30,10 +30,11 @@ jobs:
           python-version: ${{ matrix.python }}
           cache: pip
       - run: pip install -r requirements-dev.txt
-      - name: Unit + property + integration tests
+      - name: Unit + property + integration tests + handler guard
         run: |
           python -m tests.test_money
           python -m tests.test_app
+          python -m tests.test_handlers
 
   quality:
     name: Lint & types
@@ -119,9 +120,27 @@ jobs:
             echo "TURSO_DATABASE_URL not set — skipping Turso smoke."
           fi
 
+  ui:
+    name: UI (Playwright E2E)
+    runs-on: ubuntu-latest
+    env:
+      SECRET_KEY: ci-secret
+      APP_PASSWORD: ci-pass
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version-file: ".python-version"
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+      - name: Install Chromium
+        run: python -m playwright install --with-deps chromium
+      - name: Real-browser E2E (every interactive control)
+        run: python -m tests.test_ui
+
   deploy:
     name: Render deploy
-    needs: [test, quality, security]
+    needs: [test, quality, security, ui]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
