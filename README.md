@@ -215,6 +215,11 @@ make typecheck     # mypy (money/config/auth)
 make hooks         # install the pre-commit git hooks
 ```
 
+**Demo data for screenshots** — `python scripts/seed_demo.py` fills a throwaway `demo.db`
+(never your real data or Turso) with two months of expenses across ~10 categories, then run
+`env -u TURSO_DATABASE_URL -u TURSO_AUTH_TOKEN APP_PASSWORD=demo DB_PATH=demo.db uvicorn app:app --reload`
+to capture the README screens (the `env -u` keeps an exported Turso config from overriding `DB_PATH`).
+
 ## Continuous integration
 
 `.github/workflows/ci.yml` runs on every push and PR (with `concurrency` so superseded runs cancel):
