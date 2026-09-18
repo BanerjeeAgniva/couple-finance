@@ -213,8 +213,13 @@ make hooks         # install the pre-commit git hooks
 `.github/workflows/ci.yml` runs on every push and PR (with `concurrency` so superseded runs cancel):
 
 - **Tests** — `test_money.py` (pure money math + **Hypothesis** property tests: split always sums,
-  paying back the balance settles) and `test_app.py` (integration smoke via `TestClient`, offline
-  against a throwaway SQLite DB).
+  paying back the balance settles), `test_app.py` (integration smoke via `TestClient`, offline
+  against a throwaway SQLite DB), and `test_handlers.py` (static guard: every inline `on*` handler is
+  exposed on `window`).
+- **UI E2E** — `test_ui.py` drives a real headless **Playwright** Chromium against a live server and
+  clicks every interactive control (category picker, payer switch, add/edit/delete, settle, trends,
+  recurring, notes, settings, onboarding, login) — a regression of any inline handler fails the build.
+  Gates deploy. Run locally with `make ui-setup && make ui`.
 - **Lint & types** — `ruff check .` (`ruff.toml`) and `mypy` over the typed modules (`money/config/auth`).
 - **Security** — `pip-audit` (dependency CVE scan) and **gitleaks** (secret scan).
 - **API fuzzing** — **schemathesis** hammers the FastAPI OpenAPI schema with generated inputs

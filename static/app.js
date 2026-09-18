@@ -459,7 +459,7 @@ async function saveEdit(e) {
   } }));
   closeEdit(); await loadActivity(); await loadBalance();
 }
-function deleteFromEdit() { delExpense($("#edit-form").id.value); }
+function deleteFromEdit() { delExpense($("#edit-form [name=id]").value); }
 
 // --- trends ----------------------------------------------------------------
 let RANGE = 6;
