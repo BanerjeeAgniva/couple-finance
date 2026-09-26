@@ -663,10 +663,12 @@ function insightCardHTML(i) {
 function trendStatsHTML(d) {
   const stats = [];
   if (d.mom_pct != null) {
-    const down = d.mom_pct < 0;
-    stats.push(`<div class="trend-stat ${down ? "good" : "up"}">
-      <div class="ts-lbl">vs last month</div>
-      <div class="ts-val">${down ? "▼" : "▲"} ${Math.abs(d.mom_pct)}%</div></div>`);
+    const p = d.mom_pct;                                   // last complete month vs the one before
+    const cls = p < 0 ? "good" : p > 0 ? "up" : "";        // 0% is neutral, not "up"
+    const val = p === 0 ? "No change" : `${p < 0 ? "▼" : "▲"} ${Math.abs(p)}%`;
+    stats.push(`<div class="trend-stat ${cls}">
+      <div class="ts-lbl">Month over month</div>
+      <div class="ts-val">${val}</div></div>`);
   }
   if (d.top_merchant) {
     stats.push(`<div class="trend-stat">

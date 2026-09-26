@@ -50,6 +50,19 @@ def test_expense_note_roundtrip():
                for r in authed.get("/api/activity?days=0").json() if r.get("type") == "expense")
 
 
+def test_note_preserved_when_put_omits_it():
+    authed.post("/api/expenses",
+                json={"description": "Cab", "amount_paise": 3000, "paid_by": 1, "note": "keep me"})
+    eid = max(e["id"] for e in authed.get("/api/expenses").json() if e["description"] == "Cab")
+    base = {"date": "2026-09-10", "description": "Cab", "amount_paise": 3000, "paid_by": 1}
+    # a PUT that omits the note key must keep the existing note
+    authed.put(f"/api/expenses/{eid}", json=base)
+    assert next(e for e in authed.get("/api/expenses").json() if e["id"] == eid)["note"] == "keep me"
+    # ...but an explicit empty note clears it
+    authed.put(f"/api/expenses/{eid}", json={**base, "note": ""})
+    assert next(e for e in authed.get("/api/expenses").json() if e["id"] == eid)["note"] in (None, "")
+
+
 def test_expense_write_and_readback():
     assert authed.post("/api/expenses",
                        json={"description": "Test", "amount_paise": 10000, "paid_by": 1}
