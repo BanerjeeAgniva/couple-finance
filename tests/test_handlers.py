@@ -53,7 +53,7 @@ def test_guard_finds_the_known_handlers():
     # sanity: the extractor actually finds handlers (guards against a broken regex
     # that would make the subset check vacuously pass)
     inline = _handlers_in(INDEX) | _handlers_in(APPJS)
-    for expected in ("pickCat", "openNote", "openEdit", "toggleChecklist", "addExpense", "goTab"):
+    for expected in ("pickCat", "setActFilter", "openEdit", "delRecurring", "addExpense", "goTab"):
         assert expected in inline, f"extractor failed to find inline handler {expected!r}"
 
 

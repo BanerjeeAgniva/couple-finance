@@ -97,9 +97,6 @@ def _seed(base):
              "amount_paise": rs * 100, "category_id": cats.get(cat), "paid_by": by}, ck)
     _req(base, "POST", "/api/settlements", {"date": "2026-08-31", "amount_paise": 200000,
          "from_person": 2, "to_person": 1, "note": "August"}, ck)
-    nid = _req(base, "POST", "/api/notes", None, ck)["id"]
-    _req(base, "PUT", f"/api/notes/{nid}", {"content": "Goa trip\n- [ ] book hotel\n- [x] flights",
-         "pinned": True}, ck)
 
 
 # ---- checks (each raises AssertionError on failure) -------------------------
@@ -115,7 +112,7 @@ def check_boot(page):
 
 
 def check_tabs(page):
-    for t in ["activity", "settle", "trends", "recurring", "scratch", "settings", "add"]:
+    for t in ["activity", "settle", "trends", "recurring", "settings", "add"]:
         page.click(f'.tab-btn[data-tab="{t}"]')
         page.wait_for_selector(f"#tab-{t}", state="visible")
     page.click("#balance-chip")   # goTab('settle')
@@ -156,9 +153,14 @@ def check_add_expense(page):
     _open_add(page)
     page.fill('#expense-form [name="amount"]', "123")
     page.fill('#expense-form [name="description"]', "UI test expense")
+    page.fill('#expense-form [name="note"]', "remember: reimburse from office")
     page.click('#expense-form button[type="submit"]')     # addExpense
     page.wait_for_selector("#toasts .toast", state="visible")
     page.wait_for_function("document.querySelector('#expense-form [name=amount]').value === ''")
+    # the note renders on the activity row
+    page.click('.tab-btn[data-tab="activity"]')
+    page.wait_for_selector("#activity-list .row-note", state="visible")
+    assert "reimburse" in page.locator("#activity-list .row-note").first.inner_text()
 
 
 def check_edit_and_delete(page):
@@ -219,6 +221,7 @@ def check_settle(page):
 def check_trends(page):
     page.click('.tab-btn[data-tab="trends"]')
     page.wait_for_selector("#trends-box .chart-card", state="visible")
+    page.wait_for_selector(".trend-stats .trend-stat", state="visible")   # MoM % / top merchant
     page.click('#range-seg .seg-opt[data-m="12"]')
     page.wait_for_selector(".hist-pill", state="visible")
     page.locator(".hist-pill").nth(1).click()               # switch spend-history category
@@ -236,22 +239,18 @@ def check_recurring(page):
     page.locator('#rec-list [onclick*="delRecurring"]').first.click()   # delRecurring (dialog accepted)
 
 
-def check_notes(page):
-    page.click('.tab-btn[data-tab="scratch"]')
-    page.wait_for_selector("#tab-scratch", state="visible")
-    page.locator('#tab-scratch .chip-btn', has_text="New note").click()   # newNote
-    page.wait_for_selector("#notes-editor-view", state="visible")
-    page.fill("#scratch", "Groceries plan\n- [ ] milk")
-    page.click('[onclick="insertChecklistItem()"]')          # insertChecklistItem
-    page.wait_for_selector("#checklist-panel", state="visible")
-    page.locator('#checklist-panel input[type="checkbox"]').first.check()   # toggleChecklist
-    page.click("#pin-btn")                                   # togglePin
-    page.click(".back-btn")                                  # backToNotes
-    page.wait_for_selector("#notes-list .note-card", state="visible")
-    page.locator("#notes-list .note-card").first.click()     # openNote
-    page.wait_for_selector("#notes-editor-view", state="visible")
-    page.click('[onclick="deleteCurrentNote()"]')            # deleteCurrentNote (dialog accepted)
-    page.wait_for_selector("#notes-list-view", state="visible")
+def check_edit_note(page):
+    # open an expense, add/replace its note in the edit modal, save, and see it on the row
+    page.click('.tab-btn[data-tab="activity"]')
+    page.wait_for_selector("#activity-list .row-tap", state="visible")
+    page.wait_for_load_state("networkidle")
+    page.locator("#activity-list .row-tap").first.click()
+    page.wait_for_selector("#edit-modal", state="visible")
+    page.fill('#edit-form [name="note"]', "edited note via modal")
+    page.click('#edit-form button[type="submit"]')          # saveEdit
+    page.wait_for_selector("#edit-modal", state="hidden")
+    page.wait_for_load_state("networkidle")
+    page.wait_for_selector('#activity-list .row-note:has-text("edited note via modal")', state="visible")
 
 
 def check_settings(page):
@@ -326,7 +325,7 @@ def check_category_budget(page):
 SEEDED_CHECKS = [
     check_boot, check_tabs, check_category_pick, check_payer_switch, check_split_custom,
     check_add_expense, check_edit_and_delete, check_activity_search, check_settle, check_trends, check_recurring,
-    check_notes, check_settings, check_category_budget,
+    check_edit_note, check_settings, check_category_budget,
 ]
 
 

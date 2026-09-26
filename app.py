@@ -13,7 +13,7 @@ from fastapi.staticfiles import StaticFiles
 import config
 from db import init_db, migrate
 from routers import (
-    expenses, export, insights, ledger, notes, ocr, recurring, session, settings,
+    expenses, export, insights, ledger, ocr, recurring, session, settings,
 )
 
 # Re-exported so `from app import ...` keeps working (test_money.py and any external callers).
@@ -32,7 +32,7 @@ async def _cache_static_fonts(request: Request, call_next):
     return resp
 
 
-for _router in (session, settings, expenses, recurring, ledger, insights, ocr, notes, export):
+for _router in (session, settings, expenses, recurring, ledger, insights, ocr, export):
     app.include_router(_router.router)
 
 

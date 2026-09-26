@@ -37,7 +37,30 @@ def test_bootstrap_and_analytics():
     assert {"settings", "categories", "balance"} <= b.keys(), b
     a = authed.get("/api/analytics?months=6").json()
     assert "months" in a and "by_category" in a, a
+    assert "mom_pct" in a and "top_merchant" in a, a       # trend stats
     assert "balance_paise" in authed.get("/api/balance").json()
+
+
+def test_expense_note_roundtrip():
+    authed.post("/api/expenses",
+                json={"description": "Dinner", "amount_paise": 8000, "paid_by": 1,
+                      "note": "anniversary treat"})
+    assert any(r.get("note") == "anniversary treat" for r in authed.get("/api/expenses").json())
+    assert any(r.get("note") == "anniversary treat"
+               for r in authed.get("/api/activity?days=0").json() if r.get("type") == "expense")
+
+
+def test_note_preserved_when_put_omits_it():
+    authed.post("/api/expenses",
+                json={"description": "Cab", "amount_paise": 3000, "paid_by": 1, "note": "keep me"})
+    eid = max(e["id"] for e in authed.get("/api/expenses").json() if e["description"] == "Cab")
+    base = {"date": "2026-09-10", "description": "Cab", "amount_paise": 3000, "paid_by": 1}
+    # a PUT that omits the note key must keep the existing note
+    authed.put(f"/api/expenses/{eid}", json=base)
+    assert next(e for e in authed.get("/api/expenses").json() if e["id"] == eid)["note"] == "keep me"
+    # ...but an explicit empty note clears it
+    authed.put(f"/api/expenses/{eid}", json={**base, "note": ""})
+    assert next(e for e in authed.get("/api/expenses").json() if e["id"] == eid)["note"] in (None, "")
 
 
 def test_expense_write_and_readback():

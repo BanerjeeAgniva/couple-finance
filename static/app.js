@@ -4,7 +4,6 @@
 import { rs, rs0, toPaise, esc, mLabel, jbody, fmtDate, initial } from "./js/format.js";
 import { catIconId, catColor, catColorStyle } from "./js/categories.js";
 import { upiLink, upiInfo } from "./js/upi.js";
-import { CL_RE, noteTitle, notePreview } from "./js/notes-parse.js";
 import { sparkSvg } from "./js/chart.js";
 
 // --- helpers ---------------------------------------------------------------
@@ -70,7 +69,7 @@ function avatarChip(p, cls = "chip", extra = "") {
 }
 
 const TAB_TITLE = { add: "Add expense", activity: "Activity", settle: "Settle up",
-                    trends: "Trends", recurring: "Recurring", scratch: "Shared notes", settings: "Settings" };
+                    trends: "Trends", recurring: "Recurring", settings: "Settings" };
 
 // --- auth ------------------------------------------------------------------
 function showLogin() { $("#login").hidden = false; $("#app").hidden = true; }
@@ -103,7 +102,7 @@ function selectTab(name) {
   if (location.hash.slice(1) !== wantHash) history.replaceState(null, "", "#" + wantHash);
   $(".scroll").scrollTop = 0;
   ({ activity: loadActivity, settle: loadSettle, trends: loadTrends, recurring: loadRecurring,
-     scratch: loadNotes, settings: loadSettings }[name] || (() => {}))();
+     settings: loadSettings }[name] || (() => {}))();
 }
 const goTab = selectTab;
 // hash is "tab" or "activity/<category>" — split off the optional category filter
@@ -374,7 +373,7 @@ async function addExpense(e) {
   await api("/api/expenses", jbody({ body: {
     description: f.description.value, amount_paise: toPaise(f.amount.value),
     category_id: +f.category_id.value, paid_by: segValue($("#paidby-seg")),
-    date: f.date.value || undefined,
+    date: f.date.value || undefined, note: f.note.value.trim(),
     override_r1: f.override_r1.value !== "" ? +f.override_r1.value : null,
     override_r2: f.override_r2.value !== "" ? +f.override_r2.value : null,
   } }));
@@ -544,11 +543,13 @@ function expenseRow(x) {
   const to = x.paid_to ? ` · <span class="tag">→ ${esc(x.paid_to)}</span>` : "";
   const ov = x.override_r1 != null ? ` · ${x.override_r1}:${x.override_r2}` : "";
   const cat = x.category || "—";
+  const note = (x.note || "").trim() ? `<div class="row-note">${esc(x.note.trim())}</div>` : "";
   return `<div class="row row-tap" onclick="openEdit(${x.id})">
     ${avatarChip(x.paid_by, "row-avatar")}
     <div class="row-main">
       <div class="row-desc">${esc(x.description)}</div>
       <div class="row-meta"><svg class="cat-ic"${catColorStyle(cat)}><use href="#${catIconId(cat)}"/></svg>${fmtDate(x.date)} · ${esc(cat)}${to}${ov}</div>
+      ${note}
     </div>
     <div class="row-right"><div class="row-amt">${rs0(x.amount_paise)}</div>
       <div class="row-shares">${person(1).letter} ${rs0(x.share1_paise)} · ${person(2).letter} ${rs0(x.share2_paise)}</div></div>
@@ -581,6 +582,7 @@ function openEdit(id) {
   f.description.value = x.description;
   f.category_id.value = x.category_id || "";
   f.paid_to.value = x.paid_to || "";
+  f.note.value = x.note || "";
   f.date.value = x.date;
   setSeg($("#edit-paidby-seg"), x.paid_by);
   setSplitFromOverride($("#edit-split-seg"), f, $("#edit-ov"),
@@ -594,6 +596,7 @@ async function saveEdit(e) {
   await api("/api/expenses/" + f.id.value, jbody({ method: "PUT", body: {
     date: f.date.value, description: f.description.value, amount_paise: toPaise(f.amount.value),
     category_id: +f.category_id.value, paid_by: segValue($("#edit-paidby-seg")), paid_to: f.paid_to.value,
+    note: f.note.value.trim(),
     override_r1: f.override_r1.value !== "" ? +f.override_r1.value : null,
     override_r2: f.override_r2.value !== "" ? +f.override_r2.value : null,
   } }));
@@ -656,6 +659,25 @@ function insightCardHTML(i) {
     <div class="insight-detail">${esc(i.detail)}</div></div>`;
 }
 
+// two quick reads on the money: last month vs the one before, and this month's biggest merchant
+function trendStatsHTML(d) {
+  const stats = [];
+  if (d.mom_pct != null) {
+    const p = d.mom_pct;                                   // last complete month vs the one before
+    const cls = p < 0 ? "good" : p > 0 ? "up" : "";        // 0% is neutral, not "up"
+    const val = p === 0 ? "No change" : `${p < 0 ? "▼" : "▲"} ${Math.abs(p)}%`;
+    stats.push(`<div class="trend-stat ${cls}">
+      <div class="ts-lbl">Month over month</div>
+      <div class="ts-val">${val}</div></div>`);
+  }
+  if (d.top_merchant) {
+    stats.push(`<div class="trend-stat">
+      <div class="ts-lbl">Top this month</div>
+      <div class="ts-val">${esc(d.top_merchant.desc)} · ${rs0(d.top_merchant.amount_paise)}</div></div>`);
+  }
+  return stats.length ? `<div class="trend-stats">${stats.join("")}</div>` : "";
+}
+
 async function loadTrends() {
   const d = await api("/api/analytics?months=" + RANGE);
   HIST_DATA = { cats: d.by_category, months: d.months };
@@ -690,6 +712,7 @@ async function loadTrends() {
         <div><span class="leg-dot" style="background:var(--b)"></span>${esc(d.name2)}<span class="v">${rs0(sum2)}</span></div>
       </div>
     </div>
+    ${trendStatsHTML(d)}
     <div class="chart-card">
       <div class="chart-title">Monthly spend</div>
       <div class="bar-chart">${bars}</div>
@@ -728,111 +751,6 @@ async function delRecurring(id) {
   if (!confirm("Delete this recurring expense?")) return;
   await api("/api/recurring/" + id, { method: "DELETE" }); loadRecurring();
 }
-
-// --- notes (multiple, minimal) ---------------------------------------------
-let scratchTimer, CUR_NOTE = null, NOTES = [];
-function showNotesList() { $("#notes-editor-view").hidden = true; $("#notes-list-view").hidden = false; }
-async function loadNotes() {
-  showNotesList();
-  NOTES = await api("/api/notes");
-  renderNotesList();
-}
-function renderNotesList() {
-  const q = ($("#notes-search").value || "").toLowerCase().trim();
-  const list = q ? NOTES.filter((n) => (n.content || "").toLowerCase().includes(q)) : NOTES;
-  $("#notes-list").innerHTML = list.length ? list.map((n) => {
-    const prev = notePreview(n.content);
-    return `<button type="button" class="note-card${n.pinned ? " pinned" : ""}" onclick="openNote(${n.id})">
-      <div class="note-title">${n.pinned ? '<svg class="ic pin-mark"><use href="#i-pin"/></svg>' : ""}${esc(noteTitle(n.content))}</div>
-      <div class="note-sub"><span class="note-prev">${esc(prev || (n.content.trim() ? "" : "Empty note"))}</span><span class="note-date">${fmtDate((n.updated_at || "").slice(0, 10))}</span></div>
-    </button>`;
-  }).join("") : (q ? `<div class="empty"><div class="empty-title">No matches</div></div>`
-    : emptyState("notes", "No notes yet", "Keep separate notes for trips, shopping lists, reminders — anything you two share.", "newNote()", "New note"));
-}
-async function newNote() {
-  const { id } = await api("/api/notes", { method: "POST" });
-  NOTES.unshift({ id, content: "", updated_at: new Date().toISOString(), pinned: 0 });
-  openNote(id, true);
-}
-function openNote(id) {
-  const n = NOTES.find((x) => x.id === id);
-  if (!n) return loadNotes();
-  CUR_NOTE = id;
-  $("#scratch").value = n.content || "";
-  $("#scratch-status").textContent = "";
-  updatePinBtn();
-  renderChecklist();
-  $("#notes-list-view").hidden = true; $("#notes-editor-view").hidden = false;
-  $("#scratch").focus();
-}
-function curNote() { return NOTES.find((x) => x.id === CUR_NOTE); }
-function updatePinBtn() { const n = curNote(); $("#pin-btn").classList.toggle("on", !!(n && n.pinned)); }
-async function backToNotes() { clearTimeout(scratchTimer); await saveNoteNow(); CUR_NOTE = null; loadNotes(); }
-async function saveNoteNow() {
-  const n = curNote(); if (!n) return;
-  n.content = $("#scratch").value;
-  await api("/api/notes/" + n.id, jbody({ method: "PUT", body: { content: n.content } }));
-}
-async function togglePin() {
-  const n = curNote(); if (!n) return;
-  n.pinned = n.pinned ? 0 : 1;
-  updatePinBtn();
-  await api("/api/notes/" + n.id, jbody({ method: "PUT", body: { pinned: !!n.pinned } }));
-  toast(n.pinned ? "Pinned" : "Unpinned");
-}
-async function deleteCurrentNote() {
-  if (CUR_NOTE == null) return;
-  if (!confirm("Delete this note?")) return;
-  clearTimeout(scratchTimer);
-  await api("/api/notes/" + CUR_NOTE, { method: "DELETE" });
-  NOTES = NOTES.filter((x) => x.id !== CUR_NOTE); CUR_NOTE = null;
-  loadNotes(); toast("Note deleted");
-}
-// checklist: render tappable boxes for "- [ ] / - [x]" lines
-function renderChecklist() {
-  const lines = ($("#scratch").value || "").split("\n");
-  const items = lines.map((l, i) => [i, l.match(CL_RE)]).filter(([, m]) => m);
-  const panel = $("#checklist-panel");
-  if (!items.length) { panel.hidden = true; panel.innerHTML = ""; return; }
-  panel.hidden = false;
-  panel.innerHTML = items.map(([i, m]) =>
-    `<label class="cl-item${m[2] === "x" ? " done" : ""}"><input type="checkbox" ${m[2] === "x" ? "checked" : ""} onchange="toggleChecklist(${i})"><span>${esc(m[3]) || "Item"}</span></label>`).join("");
-}
-function toggleChecklist(i) {
-  const lines = $("#scratch").value.split("\n");
-  const m = lines[i].match(CL_RE); if (!m) return;
-  lines[i] = `${m[1]}- [${m[2] === "x" ? " " : "x"}] ${m[3]}`;
-  $("#scratch").value = lines.join("\n");
-  renderChecklist();
-  queueNoteSave();
-}
-function insertChecklistItem() {
-  const ta = $("#scratch");
-  const v = ta.value;
-  ta.value = v + (v && !v.endsWith("\n") ? "\n" : "") + "- [ ] ";
-  ta.focus();
-  renderChecklist(); queueNoteSave();
-}
-function queueNoteSave() {
-  if (CUR_NOTE == null) return;
-  clearTimeout(scratchTimer); $("#scratch-status").textContent = "Saving…";
-  scratchTimer = setTimeout(async () => { await saveNoteNow(); $("#scratch-status").textContent = "Saved"; }, 600);
-}
-$("#scratch")?.addEventListener("input", () => { renderChecklist(); queueNoteSave(); });
-// Enter on a "- [ ] " line auto-continues the checklist
-$("#scratch")?.addEventListener("keydown", (e) => {
-  if (e.key !== "Enter") return;
-  const ta = e.target, pos = ta.selectionStart;
-  const before = ta.value.slice(0, pos), curLine = before.slice(before.lastIndexOf("\n") + 1);
-  const m = curLine.match(CL_RE);
-  if (m && m[3].trim()) {
-    e.preventDefault();
-    const ins = "\n- [ ] ";
-    ta.value = before + ins + ta.value.slice(pos);
-    ta.selectionStart = ta.selectionEnd = pos + ins.length;
-    renderChecklist(); queueNoteSave();
-  }
-});
 
 // --- settings --------------------------------------------------------------
 function renderSplitStrip() {
@@ -1023,13 +941,12 @@ function exportCsv() {
 Object.assign(window, {
   // static handlers in index.html
   doLogin, goTab, addExpense, toggleCatPop, scanReceipt, setSplitAdd, copyUpi, settleUp,
-  addRecurring, renderNotesList, newNote, backToNotes, togglePin, insertChecklistItem,
-  deleteCurrentNote, saveSettings, pickAvatar, removeAvatar, onAvatarPick, addCategory,
+  addRecurring, saveSettings, pickAvatar, removeAvatar, onAvatarPick, addCategory,
   setTheme, exportCsv, saveOnboarding, skipOnboarding, dismissPayPrompt, confirmPayPrompt,
   closeEdit, saveEdit, deleteFromEdit, setActFilter,
   actSearch, clearActSearch, actSetPayer, actSetAmount, actSetRange, clearActFilters,
   // handlers embedded in JS-rendered markup
-  pickCat, openNote, openEdit, toggleChecklist, delCategory, delRecurring, delSettlement,
+  pickCat, openEdit, delCategory, delRecurring, delSettlement,
   setBudget,
 });
 

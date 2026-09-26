@@ -30,11 +30,12 @@ async def add_expense(request: Request):
     b = await request.json()
     with db() as c:
         c.execute("""INSERT INTO expenses (date, description, amount_paise, category_id,
-                  paid_by, paid_to, override_r1, override_r2, created_at)
-                  VALUES (?,?,?,?,?,?,?,?,?)""",
+                  paid_by, paid_to, override_r1, override_r2, note, created_at)
+                  VALUES (?,?,?,?,?,?,?,?,?,?)""",
                   (b.get("date") or date.today().isoformat(), b["description"],
                    int(b["amount_paise"]), b.get("category_id"), int(b["paid_by"]),
-                   b.get("paid_to", ""), b.get("override_r1"), b.get("override_r2"), now()))
+                   b.get("paid_to", ""), b.get("override_r1"), b.get("override_r2"),
+                   b.get("note", ""), now()))
     return {"ok": True}
 
 
@@ -42,12 +43,15 @@ async def add_expense(request: Request):
 async def edit_expense(eid: int, request: Request):
     b = await request.json()
     with db() as c:
+        # note is only overwritten when the key is present, so a PUT that omits it keeps the
+        # existing note (sending "" still clears it explicitly)
         c.execute("""UPDATE expenses SET date=?, description=?, amount_paise=?,
-                  category_id=?, paid_by=?, paid_to=?, override_r1=?, override_r2=?
+                  category_id=?, paid_by=?, paid_to=?, override_r1=?, override_r2=?,
+                  note=CASE WHEN ? THEN ? ELSE note END
                   WHERE id=?""",
                   (b["date"], b["description"], int(b["amount_paise"]), b.get("category_id"),
                    int(b["paid_by"]), b.get("paid_to", ""), b.get("override_r1"),
-                   b.get("override_r2"), eid))
+                   b.get("override_r2"), "note" in b, b.get("note", ""), eid))
     return {"ok": True}
 
 
