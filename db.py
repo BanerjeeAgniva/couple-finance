@@ -87,10 +87,6 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             date TEXT, amount_paise INTEGER, from_person INTEGER,
             to_person INTEGER, note TEXT);
-        CREATE TABLE IF NOT EXISTS scratchpad (
-            id INTEGER PRIMARY KEY CHECK (id=1), content TEXT, updated_at TEXT);
-        CREATE TABLE IF NOT EXISTS notes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, content TEXT, updated_at TEXT);
         """)
         if not c.execute("SELECT 1 FROM settings WHERE id=1").fetchone():
             c.execute("INSERT INTO settings VALUES (1,?,?,?,?)",
@@ -98,8 +94,6 @@ def init_db():
         if not c.execute("SELECT 1 FROM categories").fetchone():
             c.executemany("INSERT INTO categories (name) VALUES (?)",
                           [(n,) for n in config.DEFAULT_CATEGORIES])
-        if not c.execute("SELECT 1 FROM scratchpad WHERE id=1").fetchone():
-            c.execute("INSERT INTO scratchpad VALUES (1,'',?)", (now(),))
 
 
 def migrate():
@@ -110,10 +104,6 @@ def migrate():
                 c.execute(f"ALTER TABLE settings ADD COLUMN {col}")
             except Exception:
                 pass  # column already exists
-        try:
-            c.execute("ALTER TABLE notes ADD COLUMN pinned INTEGER DEFAULT 0")
-        except Exception:
-            pass
         for col in ("avatar1 TEXT", "avatar2 TEXT"):
             try:
                 c.execute(f"ALTER TABLE settings ADD COLUMN {col}")
@@ -123,17 +113,18 @@ def migrate():
             c.execute("ALTER TABLE categories ADD COLUMN budget_paise INTEGER")
         except Exception:
             pass
+        try:  # free-text note attached to a single expense
+            c.execute("ALTER TABLE expenses ADD COLUMN note TEXT")
+        except Exception:
+            pass
         # frequently-used delivery apps as ready-made categories (idempotent; name is UNIQUE)
         for name in ("Amazon", "Blinkit", "Instamart", "Zepto", "Swiggy", "Zomato",
                      "Flipkart", "Pronto", "Furlenco", "Rentomojo", "Snabbit", "UrbanClap",
                      "Rapido", "Uber"):
             c.execute("INSERT OR IGNORE INTO categories (name) VALUES (?)", (name,))
-        # seed the first note from the legacy single scratchpad, once
-        if not c.execute("SELECT 1 FROM notes LIMIT 1").fetchone():
-            row = c.execute("SELECT content FROM scratchpad WHERE id=1").fetchone()
-            if row and (row["content"] or "").strip():
-                c.execute("INSERT INTO notes (content, updated_at) VALUES (?,?)",
-                          (row["content"], now()))
+        # the standalone notes feature was removed — drop its tables (and data) if present
+        c.execute("DROP TABLE IF EXISTS notes")
+        c.execute("DROP TABLE IF EXISTS scratchpad")
 
 
 def now() -> str:
@@ -220,6 +211,8 @@ def analytics_data(c, months: int = 6):
     keys = month_keys(months)
     per = {k: {"month": k, "total_paise": 0, "share1_paise": 0, "share2_paise": 0} for k in keys}
     by_cat: dict[str, int] = {}
+    cur_merchant: dict[str, int] = {}          # current month spend per merchant/description
+    cur_key = keys[-1]
     rows = expense_rows(c)
     for r in rows:
         if (r["date"] or "")[:7] not in per:
@@ -232,9 +225,23 @@ def analytics_data(c, months: int = 6):
         per[k]["share2_paise"] += s2
         cat = r["category"] or "Uncategorised"
         by_cat[cat] = by_cat.get(cat, 0) + r["amount_paise"]
+        if k == cur_key and (r["description"] or "").strip():
+            d = r["description"].strip()
+            cur_merchant[d] = cur_merchant.get(d, 0) + r["amount_paise"]
     hist = category_monthly(rows, keys)
     s = c.execute("SELECT name1, name2 FROM settings WHERE id=1").fetchone()
+    # month-over-month %: last complete month vs the one before (keys[-1] is the current, partial month)
+    mom_pct = None
+    if len(keys) >= 3:
+        prev, last = per[keys[-3]]["total_paise"], per[keys[-2]]["total_paise"]
+        if prev > 0:
+            mom_pct = round((last - prev) / prev * 100)
+    top_merchant = None
+    if cur_merchant:
+        desc, amt = max(cur_merchant.items(), key=lambda x: x[1])
+        top_merchant = {"desc": desc, "amount_paise": amt}
     return {"months": [per[k] for k in keys], "name1": s["name1"], "name2": s["name2"],
+            "mom_pct": mom_pct, "top_merchant": top_merchant,
             "by_category": [{"category": k, "amount_paise": v,
                              "count": hist.get(k, {}).get("count", 0),
                              "series": hist.get(k, {}).get("series", [0] * len(keys))}

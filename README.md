@@ -17,7 +17,7 @@ front end, money stored to the paise, UPI settlement, receipt OCR, and a hosted 
 
 ## See it move
 
-**A 60-second walk through the whole app** — add an expense, pick a brand, then activity, settle-up, trends and notes.
+**A 60-second walk through the whole app** — add an expense, pick a brand, then activity, settle-up and trends.
 
 <p align="center"><img src="screenshots/walkthrough.gif" alt="Couple Finance — full walkthrough" width="300"></p>
 
@@ -38,13 +38,16 @@ other — and the whole ledger re-reasons instantly.
 - **Receipt OCR** — snap a bill; it reads the total and merchant and fills the form.
 - **Per-expense override** — send one expense 50/50 or fully custom without touching the global ratio.
 - **Recurring** — rent/wifi/etc. auto-posted each month to the right payer.
-- **Trends** — monthly spend by person, per-person totals, per-category breakdown.
+- **Trends** — monthly spend by person, per-person totals, per-category breakdown, plus a
+  month-over-month change and this month's top merchant.
 - **Insights** — ranked, couple-friendly cards (settle nudge, category spikes, month-end forecast, recurring suggestions) — pure math on your data, no LLM.
 - **Category budgets** — an optional monthly cap per category, with a quiet near/over-limit nudge as you add.
 - **Search & filter** — free-text search over the activity feed (description, merchant, category, note),
   plus filters for category, who paid, amount range (surface the big-ticket spends), and date range
   (30d / 90d / this year / all time). Category filter is deep-linked at `#activity/<category>`.
-- **Shared notes & checklists**, **profile photos**, dark mode, and **CSV export**.
+- **Per-expense notes** — jot a note on any expense ("reimburse from office", "anniversary treat");
+  it shows on the row and is searchable.
+- **Profile photos**, dark mode, and **CSV export**.
 
 ---
 
@@ -96,10 +99,6 @@ price-history graph: the range it moved through and where this month lands, each
 Set rent and broadband once; they auto-post every month on the right day, to the right payer.
 ![Recurring](screenshots/09-recurring.png)
 
-### 10 · Shared notes & checklists
-Trip budgets, shopping lists, reminders — pinned, searchable, with tappable checklists.
-![Notes](screenshots/10-notes.png)
-
 ### 11 · Make it yours
 Names, incomes (the ratio), UPI IDs with live validation, profile photos, categories, theme, and CSV export.
 ![Settings](screenshots/11-settings.png)
@@ -144,7 +143,7 @@ The browser only ever talks to the backend over HTTP; the backend is the only th
 | Tier | Lives in | What it is | Talks to |
 |------|----------|------------|----------|
 | **Frontend** | `static/` (`index.html`, `app.js`, `js/`) | Zero-framework HTML/CSS/JS, served as static files | → Backend, via `fetch` HTTP calls |
-| **Backend** | `app.py` + `routers/*` + `auth`, `money`, `config` | FastAPI app: 9 feature routers over 4 shared modules | ← Frontend · → Database |
+| **Backend** | `app.py` + `routers/*` + `auth`, `money`, `config` | FastAPI app: 8 feature routers over 4 shared modules | ← Frontend · → Database |
 | **Database** | `db.py` → `couple_finance.db` **or** Turso (hosted libSQL) | Rows, balances, migrations. Same code, swaps by env var | ← Backend only |
 
 **Backend module map** — dependencies only ever point *downward*; no router imports another router, no cycles:
@@ -158,13 +157,13 @@ The browser only ever talks to the backend over HTTP; the backend is the only th
 │  • builds FastAPI app, includes all routers              │
 │  • serves index.html + /static, runs init_db()/migrate() │
 └─────────────────────────────────────────────────────────┘
-                            │ mounts 9 routers
+                            │ mounts 8 routers
       ┌──────────┬──────────┼──────────┬──────────┬─────────┐
       ▼          ▼          ▼          ▼          ▼         ▼
-  session    settings   expenses   recurring   ledger   insights   ocr   notes   export
-  (login)   (ratio/…)  (add/list)  (rules)    (balance) (charts)  (rcpt)  (memo) (csv)
-      │          │          │          │          │         │       │       │      │
-      └──────────┴──────────┴────┬─────┴──────────┴─────────┴───────┴───────┴──────┘
+  session    settings   expenses   recurring   ledger   insights   ocr   export
+  (login)   (ratio/…)  (add/list)  (rules)    (balance) (charts)  (rcpt)  (csv)
+      │          │          │          │          │         │       │       │
+      └──────────┴──────────┴────┬─────┴──────────┴─────────┴───────┴───────┘
                                  │ every router leans on the same 4 modules
              ┌───────────────────┼───────────────────┬──────────────────┐
              ▼                   ▼                   ▼                  ▼
@@ -248,8 +247,9 @@ to capture the README screens (the `env -u` keeps an exported Turso config from 
   against a throwaway SQLite DB), and `test_handlers.py` (static guard: every inline `on*` handler is
   exposed on `window`).
 - **UI E2E** — `test_ui.py` drives a real headless **Playwright** Chromium against a live server and
-  clicks every interactive control (category picker, payer switch, add/edit/delete, settle, trends,
-  recurring, notes, settings, onboarding, login) — a regression of any inline handler fails the build.
+  clicks every interactive control (category picker, payer switch, add/edit/delete, activity search,
+  settle, trends, recurring, expense notes, settings, onboarding, login) — a regression of any inline
+  handler fails the build.
   Gates deploy. Run locally with `make ui-setup && make ui`.
 - **Lint & types** — `ruff check .` (`ruff.toml`) and `mypy` over the typed modules (`money/config/auth`).
 - **Security** — `pip-audit` (dependency CVE scan) and **gitleaks** (secret scan).

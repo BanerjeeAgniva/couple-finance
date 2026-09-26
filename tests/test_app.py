@@ -37,7 +37,17 @@ def test_bootstrap_and_analytics():
     assert {"settings", "categories", "balance"} <= b.keys(), b
     a = authed.get("/api/analytics?months=6").json()
     assert "months" in a and "by_category" in a, a
+    assert "mom_pct" in a and "top_merchant" in a, a       # trend stats
     assert "balance_paise" in authed.get("/api/balance").json()
+
+
+def test_expense_note_roundtrip():
+    authed.post("/api/expenses",
+                json={"description": "Dinner", "amount_paise": 8000, "paid_by": 1,
+                      "note": "anniversary treat"})
+    assert any(r.get("note") == "anniversary treat" for r in authed.get("/api/expenses").json())
+    assert any(r.get("note") == "anniversary treat"
+               for r in authed.get("/api/activity?days=0").json() if r.get("type") == "expense")
 
 
 def test_expense_write_and_readback():

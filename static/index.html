@@ -34,7 +34,6 @@
   <symbol id="i-settle" viewBox="0 0 24 24"><path d="M4 8h13m0 0-3-3m3 3-3 3M20 16H7m0 0 3-3m-3 3 3 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   <symbol id="i-trends" viewBox="0 0 24 24"><path d="M5 20V10M12 20V4M19 20v-7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
   <symbol id="i-recurring" viewBox="0 0 24 24"><path d="M4 12a8 8 0 0 1 13.7-5.6L20 8m0 0V4m0 4h-4M20 12a8 8 0 0 1-13.7 5.6L4 16m0 0v4m0-4h4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
-  <symbol id="i-notes" viewBox="0 0 24 24"><path d="M5 4h14v16l-3-2-2 2-2-2-2 2-3-2V4Z M9 9h6M9 13h4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="m20 20-4.3-4.3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></symbol>
   <symbol id="i-settings" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M6 5v6M6 15v4M12 5v2M12 13v6M18 5v6M18 15v4"/><circle cx="6" cy="13" r="2.1"/><circle cx="12" cy="9" r="2.1"/><circle cx="18" cy="13" r="2.1"/></g></symbol>
   <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13M10 11v6M14 11v6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
@@ -44,8 +43,6 @@
   <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L18.5 9.5a2.1 2.1 0 0 0-3-3L5 17v3Z M14 7l3 3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   <symbol id="i-upi" viewBox="0 0 24 24"><path d="M14 4L8 20M18 4l-4 8 4 8M6 4l2 4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
-  <symbol id="i-back" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
-  <symbol id="i-pin" viewBox="0 0 24 24"><path d="M9 4h6l-1 6 3 3H7l3-3-1-6ZM12 16v4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   <!-- category icons (own line-icons, 1.6 stroke) -->
   <g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
   <symbol id="i-cat-rent" viewBox="0 0 24 24"><path d="M4 11.5 12 5l8 6.5M6 10.5V20h12v-9.5M10 20v-5h4v5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
@@ -91,7 +88,6 @@
       <button data-tab="settle" class="tab-btn"><svg class="ic"><use href="#i-settle"/></svg><span>Settle</span></button>
       <button data-tab="trends" class="tab-btn"><svg class="ic"><use href="#i-trends"/></svg><span>Trends</span></button>
       <button data-tab="recurring" class="tab-btn"><svg class="ic"><use href="#i-recurring"/></svg><span>Recurring</span></button>
-      <button data-tab="scratch" class="tab-btn"><svg class="ic"><use href="#i-notes"/></svg><span>Notes</span></button>
       <button data-tab="settings" class="tab-btn"><svg class="ic"><use href="#i-settings"/></svg><span>Settings</span></button>
     </nav>
   </aside>
@@ -141,6 +137,7 @@
           </div>
         </div>
         <input name="description" placeholder="What was it for?" required aria-label="Description">
+        <input name="note" placeholder="Add a note (optional)" aria-label="Note">
         <div id="cat-budget-hint" class="budget-hint" hidden></div>
         <div id="scan-status" class="scan-status" hidden></div>
         <div class="split-row">
@@ -219,32 +216,6 @@
         <button type="submit" class="btn btn-primary btn-block">Add recurring</button>
       </form>
       <div id="rec-list" class="ledger"></div>
-    </section>
-
-    <!-- NOTES -->
-    <section id="tab-scratch" class="tab" hidden>
-      <div id="notes-list-view">
-        <div class="notes-head">
-          <input id="notes-search" class="notes-search" placeholder="Search notes…" oninput="renderNotesList()" aria-label="Search notes">
-          <button type="button" class="chip-btn" onclick="newNote()"><svg class="ic"><use href="#i-add"/></svg> New note</button>
-        </div>
-        <div id="notes-list" class="notes-grid"></div>
-      </div>
-      <div id="notes-editor-view" hidden>
-        <div class="notes-editor-bar">
-          <button type="button" class="back-btn" onclick="backToNotes()"><svg class="ic"><use href="#i-back"/></svg> Notes</button>
-          <small id="scratch-status" class="notes-status"></small>
-          <div class="editor-actions">
-            <button type="button" class="chip-btn" id="pin-btn" onclick="togglePin()" aria-label="Pin note"><svg class="ic"><use href="#i-pin"/></svg></button>
-            <button type="button" class="chip-btn" onclick="insertChecklistItem()" aria-label="Add checklist item"><svg class="ic"><use href="#i-check"/></svg></button>
-            <button type="button" class="chip-btn danger-btn" onclick="deleteCurrentNote()" aria-label="Delete note"><svg class="ic"><use href="#i-trash"/></svg></button>
-          </div>
-        </div>
-        <div id="checklist-panel" class="checklist-panel" hidden></div>
-        <div class="notes-wrap">
-          <textarea id="scratch" placeholder="Write anything — a to-buy list, trip plan, reminders…&#10;Tip: “- [ ] task” makes a checklist." aria-label="Note"></textarea>
-        </div>
-      </div>
     </section>
 
     <!-- SETTINGS -->
@@ -387,6 +358,7 @@
       <select name="category_id" id="edit-cat" aria-label="Category"></select>
       <input name="paid_to" placeholder="Paid to">
     </div>
+    <input name="note" placeholder="Something to recall later? (optional)" aria-label="Note">
     <div class="payer"><span class="payer-label">Paid by</span><div class="segmented" id="edit-paidby-seg"></div></div>
     <div class="payer"><span class="payer-label">Split</span><div class="segmented segmented-sm" id="edit-split-seg"></div></div>
     <div class="ov-row" id="edit-ov" hidden>

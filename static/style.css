@@ -322,12 +322,6 @@ select { appearance: none; background-image: url("data:image/svg+xml;utf8,<svg x
 .export-row .mini { flex-direction: row; align-items: center; gap: 8px; }
 .export-row .mini input { width: 64px; text-align: center; }
 
-/* ---- notes --------------------------------------------------------------- */
-.notes-wrap { background: var(--card); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 8px 8px 4px; box-shadow: var(--shadow-sm); }
-#scratch { border: none; min-height: 58dvh; resize: vertical; font-size: 15px; line-height: 1.7; }
-#scratch:focus { box-shadow: none; }
-.notes-status { display: block; color: var(--faint); font-size: 12px; padding: 4px 12px 8px; }
-
 /* ---- mobile bottom nav (hidden on desktop) ------------------------------- */
 .tabbar { display: none; }
 
@@ -547,27 +541,6 @@ select { appearance: none; background-image: url("data:image/svg+xml;utf8,<svg x
 .upi-hint.muted { color: var(--faint); }
 .upi-hint.bad { color: var(--b-ink); }
 
-/* ===== notes (multiple, minimal) ========================================== */
-.notes-head { display: flex; justify-content: flex-end; margin-bottom: 14px; }
-.notes-grid { display: flex; flex-direction: column; gap: 10px; }
-.note-card { display: block; width: 100%; text-align: left; background: var(--card);
-  border: 1px solid var(--line); border-radius: var(--r); padding: 15px 18px; cursor: pointer;
-  box-shadow: var(--shadow-sm); transition: box-shadow .15s ease, transform .12s ease; }
-.note-card:hover { box-shadow: var(--shadow-md); }
-.note-card:active { transform: translateY(1px); }
-.note-title { font-weight: 600; font-size: 15.5px; color: var(--ink); letter-spacing: -0.01em;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.note-sub { display: flex; justify-content: space-between; gap: 12px; margin-top: 4px; font-size: 13px; color: var(--muted); }
-.note-prev { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.note-date { flex: 0 0 auto; color: var(--faint); font-variant-numeric: tabular-nums; }
-
-.notes-editor-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
-.back-btn { display: inline-flex; align-items: center; gap: 4px; background: transparent; border: none;
-  color: var(--a-ink); font-size: 15px; font-weight: 600; cursor: pointer; padding: 6px 4px; }
-.back-btn .ic { width: 20px; height: 20px; }
-.danger-btn { color: var(--faint); }
-.danger-btn:hover { background: var(--b-soft); color: var(--b-ink); border-color: var(--b-soft); }
-
 /* ===== Add-form: icon-first entry ========================================= */
 .head-date-input { width: auto; padding: 7px 10px; font-size: 13px; }
 /* bigger, easy-to-tap paid-by tabs (scoped so edit/recurring modals are unaffected) */
@@ -659,19 +632,19 @@ select { appearance: none; background-image: url("data:image/svg+xml;utf8,<svg x
 .check-lbl { flex-direction: row; align-items: center; gap: 8px; }
 .check-lbl input { width: auto; }
 
-/* ===== notes: search + pin + checklist ==================================== */
-.notes-head { justify-content: space-between; gap: 10px; align-items: center; }
-.notes-search { flex: 1; max-width: 340px; }
-.editor-actions { display: flex; gap: 8px; align-items: center; }
-.chip-btn.on { background: var(--a-soft); color: var(--a-ink); border-color: var(--a-soft); }
-.pin-mark { width: 13px; height: 13px; color: var(--a); margin-right: 6px; vertical-align: -2px; }
-.note-card.pinned { border-color: color-mix(in srgb, var(--a) 45%, var(--line)); }
-.checklist-panel { display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px;
-  background: var(--card); border: 1px solid var(--line); border-radius: var(--r); padding: 6px; box-shadow: var(--shadow-sm); }
-.cl-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; cursor: pointer; font-size: 14.5px; }
-.cl-item:hover { background: var(--ground); }
-.cl-item input { width: 18px; height: 18px; accent-color: var(--a); flex: 0 0 auto; margin: 0; }
-.cl-item.done span { text-decoration: line-through; color: var(--faint); }
+/* ===== per-expense note (on the activity row) ============================= */
+.row-note { margin-top: 3px; font-size: 12.5px; color: var(--muted); font-style: italic;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ===== trends: quick stats (vs last month, top merchant) ================== */
+.trend-stats { display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0; }
+.trend-stat { flex: 1; min-width: 140px; background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--r); padding: 12px 14px; box-shadow: var(--shadow-sm); }
+.ts-lbl { font-size: 12px; color: var(--muted); font-weight: 500; }
+.ts-val { font-size: 16px; font-weight: 700; color: var(--ink); margin-top: 3px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trend-stat.good .ts-val { color: var(--a-ink); }
+.trend-stat.up .ts-val { color: var(--b-ink); }
 
 /* ===== avatars (photo or initial) ========================================= */
 .chip.has-photo, .row-avatar.has-photo, .flow-person .chip.has-photo {
