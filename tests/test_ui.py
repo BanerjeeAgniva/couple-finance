@@ -181,6 +181,27 @@ def check_edit_and_delete(page):
     page.wait_for_selector(f'#activity-list [onclick="openEdit({del_id})"]', state="detached")
 
 
+def check_activity_search(page):
+    page.click('.tab-btn[data-tab="activity"]')
+    page.wait_for_selector("#activity-list .row-tap", state="visible")
+    page.wait_for_load_state("networkidle")
+    # a query that can't match empties the feed; the summary reads a 0 count
+    page.fill("#act-q", "zzznomatchzzz")
+    page.wait_for_selector("#activity-list .row-tap", state="detached")
+    assert page.inner_text("#act-sum").startswith("0 "), page.inner_text("#act-sum")
+    page.click("#act-x")                                     # clearActSearch restores rows
+    page.wait_for_selector("#activity-list .row-tap", state="visible")
+    # an amount floor above every expense empties it, clearing restores
+    page.fill('.act-amt input[placeholder="min ₹"]', "99999999")
+    page.wait_for_selector("#activity-list .row-tap", state="detached")
+    page.fill('.act-amt input[placeholder="min ₹"]', "")
+    page.wait_for_selector("#activity-list .row-tap", state="visible")
+    # the All-time range still loads a feed (days=0 path)
+    page.select_option("#act-range", "0")
+    page.wait_for_load_state("networkidle")
+    page.wait_for_selector("#activity-list .row-tap", state="visible")
+
+
 def check_settle(page):
     page.click('.tab-btn[data-tab="settle"]')
     page.wait_for_selector("#tab-settle", state="visible")
@@ -304,7 +325,7 @@ def check_category_budget(page):
 
 SEEDED_CHECKS = [
     check_boot, check_tabs, check_category_pick, check_payer_switch, check_split_custom,
-    check_add_expense, check_edit_and_delete, check_settle, check_trends, check_recurring,
+    check_add_expense, check_edit_and_delete, check_activity_search, check_settle, check_trends, check_recurring,
     check_notes, check_settings, check_category_budget,
 ]
 

@@ -39,18 +39,20 @@ def summary(month: str | None = None):
 
 @router.get("/api/activity")
 def activity(days: int = 90):
+    all_time = days <= 0            # days<=0 → no date window (all-time search)
     with db() as c:
         post_due_recurring(c)
         g1, g2 = global_ratio(c)
         items = []
-        for r in expense_rows(c, days=days):
+        for r in expense_rows(c, days=None if all_time else days):
             r1, r2 = resolve_ratio(r["override_r1"], r["override_r2"], g1, g2)
             s1, s2 = split(r["amount_paise"], r1, r2)
             d = dict(r); d["type"] = "expense"
             d["share1_paise"], d["share2_paise"] = s1, s2
             items.append(d)
-        for r in c.execute("SELECT * FROM settlements WHERE date >= date('now', ?) ORDER BY date DESC, id DESC",
-                           (f"-{int(days)} days",)):
+        setl_q = "SELECT * FROM settlements ORDER BY date DESC, id DESC" if all_time else \
+            "SELECT * FROM settlements WHERE date >= date('now', ?) ORDER BY date DESC, id DESC"
+        for r in c.execute(setl_q, () if all_time else (f"-{int(days)} days",)):
             d = dict(r); d["type"] = "settlement"
             items.append(d)
         items.sort(key=lambda x: (x["date"], x.get("created_at") or "", x["id"]), reverse=True)

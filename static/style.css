@@ -630,11 +630,20 @@ select { appearance: none; background-image: url("data:image/svg+xml;utf8,<svg x
 .split-row select { width: auto; padding: 8px 34px 8px 12px; font-size: 14px; }
 
 /* ===== activity: category filter ========================================== */
-.act-filterbar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
-.act-filter { position: relative; display: inline-flex; align-items: center; }
-.act-filter .cat-ic { position: absolute; left: 11px; width: 16px; height: 16px; margin: 0; pointer-events: none; }
-.act-filter select { width: auto; padding: 8px 34px 8px 34px; font-size: 14px; }
+.act-filterbar { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+.act-search { position: relative; display: flex; align-items: center; }
+.act-search-ic { position: absolute; left: 12px; width: 16px; height: 16px; color: var(--muted); pointer-events: none; }
+.act-search input { width: 100%; padding: 10px 34px; font-size: 14px; }
+.act-x { position: absolute; right: 8px; display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; border: none; background: var(--ground); color: var(--muted);
+  border-radius: var(--r-pill); cursor: pointer; }
+.act-x .ic { width: 14px; height: 14px; }
+.act-adv { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.act-adv select { width: auto; padding: 8px 12px; font-size: 13.5px; }
+.act-amt { display: inline-flex; gap: 6px; }
+.act-amt input { width: 82px; padding: 8px 10px; font-size: 13.5px; }
 .act-sum { font-size: 13px; color: var(--muted); font-weight: 500; }
+.act-sum:empty { display: none; }
 
 /* ===== toasts ============================================================= */
 .toasts { position: fixed; left: 0; right: 0; bottom: calc(18px + var(--safe-b)); z-index: 80;

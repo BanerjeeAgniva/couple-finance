@@ -47,6 +47,17 @@ def test_expense_write_and_readback():
     assert any(r["description"] == "Test" for r in authed.get("/api/expenses").json())
 
 
+def test_activity_all_time():
+    # days=0 means no date window — an old-dated expense must still appear
+    authed.post("/api/expenses",
+                json={"description": "OldOne", "amount_paise": 5000, "paid_by": 1, "date": "2020-01-01"})
+    feed = authed.get("/api/activity?days=0").json()
+    assert any(r.get("description") == "OldOne" for r in feed if r.get("type") == "expense"), feed
+    # the default 90-day window must exclude it
+    recent = authed.get("/api/activity?days=90").json()
+    assert not any(r.get("description") == "OldOne" for r in recent if r.get("type") == "expense")
+
+
 def test_category_budget():
     authed.post("/api/categories", json={"name": "Budgeted"})
     cid = next(c["id"] for c in authed.get("/api/categories").json() if c["name"] == "Budgeted")
