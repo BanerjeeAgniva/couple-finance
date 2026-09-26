@@ -415,13 +415,26 @@ async function scanReceipt(input) {
 }
 
 // --- activity feed ---------------------------------------------------------
-let ACT_ITEMS = [];
+let ACT_ITEMS = [], ACT_SEQ = 0;
 // extra filters (category is ACT_FILTER, kept separate so it drives the #activity/<cat> route)
-const ACT_F = { q: "", payer: 0, min: null, max: null, days: 120 };
-const RANGE_OPTS = [[30, "30 days"], [90, "90 days"], [366, "This year"], [0, "All time"]];
+const ACT_F = { q: "", payer: 0, min: null, max: null, range: "90" };
+const RANGE_OPTS = [["30", "30 days"], ["90", "90 days"], ["year", "This year"], ["all", "All time"]];
+
+// fetch window in days for a range key; 0 = all-time (no window), "year" = since Jan 1 (calendar year)
+function rangeDays(range) {
+  if (range === "all") return 0;
+  if (range === "year") {
+    const now = new Date();
+    return Math.floor((now - new Date(now.getFullYear(), 0, 1)) / 86400000) + 1;
+  }
+  return +range;
+}
 
 async function loadActivity() {
-  ACT_ITEMS = await api("/api/activity?days=" + ACT_F.days);
+  const seq = ++ACT_SEQ;
+  const items = await api("/api/activity?days=" + rangeDays(ACT_F.range));
+  if (seq !== ACT_SEQ) return;               // a newer range request superseded this one
+  ACT_ITEMS = items;
   ACT_BY_ID = {};
   ACT_ITEMS.forEach((x) => { if (x.type === "expense") ACT_BY_ID[x.id] = x; });
   const cats = [...new Set(ACT_ITEMS.filter((x) => x.type === "expense" && x.category).map((x) => x.category))].sort();
@@ -459,8 +472,8 @@ function actMatches(x) {
 function renderActFilterBar(cats) {
   const catOpts = ['<option value="">All categories</option>',
     ...cats.map((c) => `<option value="${esc(c)}"${c === ACT_FILTER ? " selected" : ""}>${esc(c)}</option>`)].join("");
-  const rangeOpts = RANGE_OPTS.map(([d, l]) =>
-    `<option value="${d}"${d === ACT_F.days ? " selected" : ""}>${l}</option>`).join("");
+  const rangeOpts = RANGE_OPTS.map(([v, l]) =>
+    `<option value="${v}"${v === ACT_F.range ? " selected" : ""}>${l}</option>`).join("");
   const rup = (p) => p == null ? "" : (p / 100);
   $("#act-filterbar").innerHTML = `
     <div class="act-search">
@@ -515,7 +528,7 @@ function actSearch(v) { ACT_F.q = v || ""; const x = $("#act-x"); if (x) x.hidde
 function clearActSearch() { ACT_F.q = ""; const i = $("#act-q"); if (i) i.value = ""; const x = $("#act-x"); if (x) x.hidden = true; renderActList(); if (i) i.focus(); }
 function actSetPayer(v) { ACT_F.payer = +v || 0; renderActList(); }
 function actSetAmount(which, v) { ACT_F[which] = v === "" ? null : Math.round(parseFloat(v) * 100); renderActList(); }
-function actSetRange(v) { ACT_F.days = +v; loadActivity(); }   // range changes the fetch window
+function actSetRange(v) { ACT_F.range = v; loadActivity(); }   // range changes the fetch window
 function clearActFilters() {
   ACT_F.q = ""; ACT_F.payer = 0; ACT_F.min = ACT_F.max = null;
   setActFilter("");           // also clears category + hash, then loadActivity re-renders the bar

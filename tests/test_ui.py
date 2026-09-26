@@ -197,7 +197,7 @@ def check_activity_search(page):
     page.fill('.act-amt input[placeholder="min ₹"]', "")
     page.wait_for_selector("#activity-list .row-tap", state="visible")
     # the All-time range still loads a feed (days=0 path)
-    page.select_option("#act-range", "0")
+    page.select_option("#act-range", "all")
     page.wait_for_load_state("networkidle")
     page.wait_for_selector("#activity-list .row-tap", state="visible")
 
