@@ -187,16 +187,21 @@ def check_activity_search(page):
     page.click('.tab-btn[data-tab="activity"]')
     page.wait_for_selector("#activity-list .row-tap", state="visible")
     page.wait_for_load_state("networkidle")
-    # a query that can't match empties the feed; the summary reads a 0 count
+    # a query that can't match empties the feed; the summary reads a 0 count.
+    # dispatch input explicitly — on slow headless CI a bare fill() occasionally
+    # doesn't fire oninput, leaving the filter unapplied (flaky detach wait).
     page.fill("#act-q", "zzznomatchzzz")
+    page.dispatch_event("#act-q", "input")
     page.wait_for_selector("#activity-list .row-tap", state="detached")
     assert page.inner_text("#act-sum").startswith("0 "), page.inner_text("#act-sum")
     page.click("#act-x")                                     # clearActSearch restores rows
     page.wait_for_selector("#activity-list .row-tap", state="visible")
     # an amount floor above every expense empties it, clearing restores
     page.fill('.act-amt input[placeholder="min ₹"]', "99999999")
+    page.dispatch_event('.act-amt input[placeholder="min ₹"]', "input")
     page.wait_for_selector("#activity-list .row-tap", state="detached")
     page.fill('.act-amt input[placeholder="min ₹"]', "")
+    page.dispatch_event('.act-amt input[placeholder="min ₹"]', "input")
     page.wait_for_selector("#activity-list .row-tap", state="visible")
     # the All-time range still loads a feed (days=0 path)
     page.select_option("#act-range", "all")
