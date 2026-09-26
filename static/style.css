@@ -612,7 +612,7 @@ select { appearance: none; background-image: url("data:image/svg+xml;utf8,<svg x
   border-radius: var(--r-pill); cursor: pointer; }
 .act-x .ic { width: 14px; height: 14px; }
 .act-adv { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.act-adv select { width: auto; padding: 8px 12px; font-size: 13.5px; }
+.act-adv select { width: auto; padding: 8px 12px; font-size: 13.5px; background-image: none; }
 .act-amt { display: inline-flex; gap: 6px; }
 .act-amt input { width: 82px; padding: 8px 10px; font-size: 13.5px; }
 .act-sum { font-size: 13px; color: var(--muted); font-weight: 500; }
