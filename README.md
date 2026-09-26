@@ -41,7 +41,9 @@ other — and the whole ledger re-reasons instantly.
 - **Trends** — monthly spend by person, per-person totals, per-category breakdown.
 - **Insights** — ranked, couple-friendly cards (settle nudge, category spikes, month-end forecast, recurring suggestions) — pure math on your data, no LLM.
 - **Category budgets** — an optional monthly cap per category, with a quiet near/over-limit nudge as you add.
-- **Filter by category** — zoom the activity feed to one category (count + total), deep-linked at `#activity/<category>`.
+- **Search & filter** — free-text search over the activity feed (description, merchant, category, note),
+  plus filters for category, who paid, amount range (surface the big-ticket spends), and date range
+  (30d / 90d / this year / all time). Category filter is deep-linked at `#activity/<category>`.
 - **Shared notes & checklists**, **profile photos**, dark mode, and **CSV export**.
 
 ---

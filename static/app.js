@@ -56,6 +56,7 @@ _mql.addEventListener("change", () => { if (!ls.get("cf_theme")) applyTheme(); }
 
 let SETTINGS = null, CONFIG = { ocr: false }, ACT_BY_ID = {};
 let CAT_BUDGET = {}, MONTH_SPEND = {};   // id→cap paise; category name→spent-this-month paise
+let ALL_CAT_NAMES = new Set();           // authoritative category names (for the activity filter dropdown)
 let SPEND_SEQ = 0;                       // guards against an older /api/summary response landing last
 let CURRENT_TAB = "add", SETTINGS_DIRTY = false, ACT_FILTER = "";
 const person = (p) => p === 1
@@ -415,38 +416,128 @@ async function scanReceipt(input) {
 }
 
 // --- activity feed ---------------------------------------------------------
+let ACT_ITEMS = [], ACT_SEQ = 0;
+// extra filters (category is ACT_FILTER, kept separate so it drives the #activity/<cat> route)
+const ACT_F = { q: "", payer: 0, min: null, max: null, range: "90" };
+const RANGE_OPTS = [["30", "30 days"], ["90", "90 days"], ["year", "This year"], ["all", "All time"]];
+
+// fetch window in days for a range key; 0 = all-time (no window), "year" = since Jan 1 (calendar year)
+function rangeDays(range) {
+  if (range === "all") return 0;
+  if (range === "year") {
+    const now = new Date();
+    return Math.floor((now - new Date(now.getFullYear(), 0, 1)) / 86400000) + 1;
+  }
+  return +range;
+}
+
 async function loadActivity() {
-  const items = await api("/api/activity?days=120");
+  const seq = ++ACT_SEQ;
+  const items = await api("/api/activity?days=" + rangeDays(ACT_F.range));
+  if (seq !== ACT_SEQ) return;               // a newer range request superseded this one
+  ACT_ITEMS = items;
   ACT_BY_ID = {};
-  items.forEach((x) => { if (x.type === "expense") ACT_BY_ID[x.id] = x; });
-  const cats = [...new Set(items.filter((x) => x.type === "expense" && x.category).map((x) => x.category))].sort();
-  if (ACT_FILTER && !cats.includes(ACT_FILTER)) {   // category gone → fall back to All, and drop it from the URL
+  ACT_ITEMS.forEach((x) => { if (x.type === "expense") ACT_BY_ID[x.id] = x; });
+  // dropdown from the authoritative category list (so a category empty in this range still lists);
+  // fall back to categories seen in the feed if the list hasn't loaded yet.
+  const cats = ALL_CAT_NAMES.size
+    ? [...ALL_CAT_NAMES].sort()
+    : [...new Set(ACT_ITEMS.filter((x) => x.type === "expense" && x.category).map((x) => x.category))].sort();
+  // only drop the filter when the category was actually deleted — not merely absent from this range
+  if (ACT_FILTER && ALL_CAT_NAMES.size && !ALL_CAT_NAMES.has(ACT_FILTER)) {
     const stale = ACT_FILTER;
     ACT_FILTER = "";
     if (CURRENT_TAB === "activity" && location.hash.slice(1) === "activity/" + encodeURIComponent(stale))
       history.replaceState(null, "", "#activity");
   }
-  const shown = ACT_FILTER ? items.filter((x) => x.category === ACT_FILTER) : items;
-  const opts = ['<option value="">All categories</option>',
+  renderActFilterBar(cats);
+  renderActList();
+}
+
+// true if a filter that narrows the feed is active (drives the summary line + empty copy)
+function actFiltered() {
+  return !!(ACT_FILTER || ACT_F.q || ACT_F.payer || ACT_F.min != null || ACT_F.max != null);
+}
+
+function actMatches(x) {
+  if (ACT_FILTER && x.category !== ACT_FILTER) return false;
+  if (ACT_F.payer && !(x.type === "expense" && x.paid_by === ACT_F.payer)) return false;
+  const amt = x.amount_paise || 0;
+  if (ACT_F.min != null && amt < ACT_F.min) return false;
+  if (ACT_F.max != null && amt > ACT_F.max) return false;
+  if (ACT_F.q) {
+    const hay = (x.type === "settlement"
+      ? [person(x.from_person).n, person(x.to_person).n, x.note]
+      : [x.description, x.paid_to, x.category, x.note]).join(" ").toLowerCase();
+    if (!hay.includes(ACT_F.q.toLowerCase())) return false;
+  }
+  return true;
+}
+
+// the controls: built once per load (structure); text/amount edits only re-run renderActList (keeps focus)
+function renderActFilterBar(cats) {
+  const catOpts = ['<option value="">All categories</option>',
     ...cats.map((c) => `<option value="${esc(c)}"${c === ACT_FILTER ? " selected" : ""}>${esc(c)}</option>`)].join("");
-  const tot = shown.reduce((s, x) => s + (x.amount_paise || 0), 0);
-  $("#act-filterbar").innerHTML = `<label class="act-filter">
-      <svg class="cat-ic"${catColorStyle(ACT_FILTER)}><use href="#${ACT_FILTER ? catIconId(ACT_FILTER) : "i-cat-other"}"/></svg>
-      <select id="act-cat" aria-label="Filter by category" onchange="setActFilter(this.value)">${opts}</select>
-    </label>${ACT_FILTER ? `<span class="act-sum">${shown.length} · ${rs0(tot)}</span>` : ""}`;
+  const rangeOpts = RANGE_OPTS.map(([v, l]) =>
+    `<option value="${v}"${v === ACT_F.range ? " selected" : ""}>${l}</option>`).join("");
+  const rup = (p) => p == null ? "" : (p / 100);
+  $("#act-filterbar").innerHTML = `
+    <div class="act-search">
+      <svg class="ic act-search-ic"><use href="#i-search"/></svg>
+      <input id="act-q" type="search" placeholder="Search transactions…" aria-label="Search transactions"
+             value="${esc(ACT_F.q)}" oninput="actSearch(this.value)">
+      <button type="button" id="act-x" class="act-x" aria-label="Clear search"
+              onclick="clearActSearch()"${ACT_F.q ? "" : " hidden"}><svg class="ic"><use href="#i-x"/></svg></button>
+    </div>
+    <div class="act-adv">
+      <select id="act-range" aria-label="Date range" onchange="actSetRange(this.value)">${rangeOpts}</select>
+      <select id="act-cat" aria-label="Filter by category" onchange="setActFilter(this.value)">${catOpts}</select>
+      <select id="act-payer" aria-label="Filter by who paid" onchange="actSetPayer(this.value)">
+        <option value="0"${!ACT_F.payer ? " selected" : ""}>Anyone paid</option>
+        <option value="1"${ACT_F.payer === 1 ? " selected" : ""}>${esc(person(1).n)} paid</option>
+        <option value="2"${ACT_F.payer === 2 ? " selected" : ""}>${esc(person(2).n)} paid</option>
+      </select>
+      <span class="act-amt">
+        <input type="number" min="0" step="1" inputmode="numeric" placeholder="min ₹" aria-label="Minimum amount"
+               value="${rup(ACT_F.min)}" oninput="actSetAmount('min', this.value)">
+        <input type="number" min="0" step="1" inputmode="numeric" placeholder="max ₹" aria-label="Maximum amount"
+               value="${rup(ACT_F.max)}" oninput="actSetAmount('max', this.value)">
+      </span>
+    </div>
+    <div id="act-sum" class="act-sum"></div>`;
+}
+
+// filter + render just the list and summary (no filterbar rebuild → text/number inputs keep focus)
+function renderActList() {
+  const shown = ACT_ITEMS.filter(actMatches);
+  const spend = shown.reduce((s, x) => x.type === "expense" ? s + (x.amount_paise || 0) : s, 0);
+  const sum = $("#act-sum");
+  if (sum) sum.textContent = actFiltered() ? `${shown.length} · ${rs0(spend)}` : "";
   $("#activity-list").innerHTML = shown.length
     ? shown.map((x) => x.type === "settlement" ? settlementRow(x) : expenseRow(x)).join("")
-    : emptyState("activity",
-        ACT_FILTER ? `No ${esc(ACT_FILTER)} spends` : "No expenses yet",
-        ACT_FILTER ? "Nothing logged in this category yet." : "Everything you both spend shows up here, split automatically by your income ratio.",
-        ACT_FILTER ? "setActFilter('')" : "goTab('add')",
-        ACT_FILTER ? "Show all" : "Add your first expense");
+    : actFiltered()
+      ? emptyState("activity", "No matches", "Nothing matches these filters. Try widening the range or clearing them.",
+          "clearActFilters()", "Clear filters")
+      : emptyState("activity", "No expenses yet",
+          "Everything you both spend shows up here, split automatically by your income ratio.",
+          "goTab('add')", "Add your first expense");
 }
+
 // filter the feed by category; drives the #activity/<category> route
 function setActFilter(cat) {
   ACT_FILTER = cat || "";
   const want = ACT_FILTER ? "activity/" + encodeURIComponent(ACT_FILTER) : "activity";
   if (location.hash.slice(1) !== want) history.replaceState(null, "", "#" + want);
+  renderActList();
+}
+function actSearch(v) { ACT_F.q = v || ""; const x = $("#act-x"); if (x) x.hidden = !ACT_F.q; renderActList(); }
+function clearActSearch() { ACT_F.q = ""; const i = $("#act-q"); if (i) i.value = ""; const x = $("#act-x"); if (x) x.hidden = true; renderActList(); if (i) i.focus(); }
+function actSetPayer(v) { ACT_F.payer = +v || 0; renderActList(); }
+function actSetAmount(which, v) { ACT_F[which] = v === "" ? null : Math.round(parseFloat(v) * 100); renderActList(); }
+function actSetRange(v) { ACT_F.range = v; loadActivity(); }   // range changes the fetch window
+function clearActFilters() {
+  ACT_F.q = ""; ACT_F.payer = 0; ACT_F.min = ACT_F.max = null;
+  setActFilter("");           // also clears category + hash, then loadActivity re-renders the bar
   loadActivity();
 }
 function expenseRow(x) {
@@ -820,6 +911,7 @@ async function saveSettings(e) {
 async function fillCategorySelects(cats) {
   if (!cats) cats = await api("/api/categories");
   CAT_BUDGET = {};
+  ALL_CAT_NAMES = new Set(cats.map((c) => c.name));
   for (const c of cats) if (c.budget_paise) CAT_BUDGET[c.id] = c.budget_paise;
   const opts = cats.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join("");
   $("#cat-select").innerHTML = opts; $("#rec-cat").innerHTML = opts; $("#edit-cat").innerHTML = opts;
@@ -935,6 +1027,7 @@ Object.assign(window, {
   deleteCurrentNote, saveSettings, pickAvatar, removeAvatar, onAvatarPick, addCategory,
   setTheme, exportCsv, saveOnboarding, skipOnboarding, dismissPayPrompt, confirmPayPrompt,
   closeEdit, saveEdit, deleteFromEdit, setActFilter,
+  actSearch, clearActSearch, actSetPayer, actSetAmount, actSetRange, clearActFilters,
   // handlers embedded in JS-rendered markup
   pickCat, openNote, openEdit, toggleChecklist, delCategory, delRecurring, delSettlement,
   setBudget,
