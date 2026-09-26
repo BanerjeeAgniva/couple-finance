@@ -56,6 +56,7 @@ _mql.addEventListener("change", () => { if (!ls.get("cf_theme")) applyTheme(); }
 
 let SETTINGS = null, CONFIG = { ocr: false }, ACT_BY_ID = {};
 let CAT_BUDGET = {}, MONTH_SPEND = {};   // id→cap paise; category name→spent-this-month paise
+let ALL_CAT_NAMES = new Set();           // authoritative category names (for the activity filter dropdown)
 let SPEND_SEQ = 0;                       // guards against an older /api/summary response landing last
 let CURRENT_TAB = "add", SETTINGS_DIRTY = false, ACT_FILTER = "";
 const person = (p) => p === 1
@@ -437,8 +438,13 @@ async function loadActivity() {
   ACT_ITEMS = items;
   ACT_BY_ID = {};
   ACT_ITEMS.forEach((x) => { if (x.type === "expense") ACT_BY_ID[x.id] = x; });
-  const cats = [...new Set(ACT_ITEMS.filter((x) => x.type === "expense" && x.category).map((x) => x.category))].sort();
-  if (ACT_FILTER && !cats.includes(ACT_FILTER)) {   // category gone → fall back to All, and drop it from the URL
+  // dropdown from the authoritative category list (so a category empty in this range still lists);
+  // fall back to categories seen in the feed if the list hasn't loaded yet.
+  const cats = ALL_CAT_NAMES.size
+    ? [...ALL_CAT_NAMES].sort()
+    : [...new Set(ACT_ITEMS.filter((x) => x.type === "expense" && x.category).map((x) => x.category))].sort();
+  // only drop the filter when the category was actually deleted — not merely absent from this range
+  if (ACT_FILTER && ALL_CAT_NAMES.size && !ALL_CAT_NAMES.has(ACT_FILTER)) {
     const stale = ACT_FILTER;
     ACT_FILTER = "";
     if (CURRENT_TAB === "activity" && location.hash.slice(1) === "activity/" + encodeURIComponent(stale))
@@ -905,6 +911,7 @@ async function saveSettings(e) {
 async function fillCategorySelects(cats) {
   if (!cats) cats = await api("/api/categories");
   CAT_BUDGET = {};
+  ALL_CAT_NAMES = new Set(cats.map((c) => c.name));
   for (const c of cats) if (c.budget_paise) CAT_BUDGET[c.id] = c.budget_paise;
   const opts = cats.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join("");
   $("#cat-select").innerHTML = opts; $("#rec-cat").innerHTML = opts; $("#edit-cat").innerHTML = opts;
