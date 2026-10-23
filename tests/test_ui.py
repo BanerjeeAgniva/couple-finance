@@ -18,6 +18,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from datetime import date
 import urllib.request
 
 from playwright.sync_api import sync_playwright
@@ -95,6 +96,12 @@ def _seed(base):
                                  ("2026-09-09", "Swiggy lunch", 540, "Swiggy", 1)]:
         _req(base, "POST", "/api/expenses", {"date": d, "description": desc,
              "amount_paise": rs * 100, "category_id": cats.get(cat), "paid_by": by}, ck)
+    # a current-month expense so Trends always has a top-merchant stat, whatever date CI runs on
+    # (the Sept rows above become "last month"); survives check_edit_and_delete, which only
+    # touches the newer UI-added row.
+    _req(base, "POST", "/api/expenses", {"date": date.today().isoformat(),
+         "description": "This month groceries", "amount_paise": 220000,
+         "category_id": cats.get("Groceries"), "paid_by": 1}, ck)
     _req(base, "POST", "/api/settlements", {"date": "2026-08-31", "amount_paise": 200000,
          "from_person": 2, "to_person": 1, "note": "August"}, ck)
 
@@ -261,9 +268,19 @@ def check_edit_note(page):
 def check_settings(page):
     page.click('.tab-btn[data-tab="settings"]')
     page.wait_for_selector("#settings-form", state="visible")
+    page.wait_for_load_state("networkidle")
+    # loadSettings can re-hydrate the form a beat later and clobber our edit; set the value,
+    # let any late load land, then re-assert it right before submitting so the save is a real
+    # increase (95k+60k = 155k, up from 150k) that triggers the celebration
     page.fill('#settings-form [name="income1"]', "95000")
+    page.wait_for_timeout(400)
+    page.fill('#settings-form [name="income1"]', "95000")
+    page.wait_for_function("document.querySelector('#settings-form [name=income1]').value === '95000'")
     page.click('#settings-form button[type="submit"]')      # saveSettings
-    page.wait_for_selector("#toasts .toast", state="visible")
+    # a total income increase pops the celebration modal (with confetti) instead of a toast
+    page.wait_for_selector("#celebrate-modal", state="visible")
+    page.click('#celebrate-modal button')                   # closeCelebrate ("Love that")
+    page.wait_for_selector("#celebrate-modal", state="hidden")
     # add + remove a category
     page.fill('.add-inline [name="name"]', "Petrol")
     page.click('.add-inline button[type="submit"]')          # addCategory
