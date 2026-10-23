@@ -375,6 +375,18 @@
   </form>
 </div>
 
+<!-- INCOME-RAISE CELEBRATION -->
+<div id="celebrate-modal" class="modal" hidden>
+  <div class="modal-backdrop" onclick="closeCelebrate()"></div>
+  <div class="modal-card celebrate-card">
+    <div class="celebrate-emoji">🎉</div>
+    <h2>Congratulations!</h2>
+    <p class="celebrate-amt" id="celebrate-amt"></p>
+    <p class="celebrate-sub" id="celebrate-sub"></p>
+    <button class="btn btn-primary btn-block" onclick="closeCelebrate()">Love that</button>
+  </div>
+</div>
+
 <script src="/static/qrcode.min.js"></script>
 <script type="module" src="/static/app.js"></script>
 </body>

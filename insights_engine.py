@@ -125,6 +125,22 @@ def teamwork_win(month_totals, keys):
     }
 
 
+def income_up(latest_change):
+    """Celebrate a household income increase — the rare, happy money moment."""
+    if not latest_change:
+        return None
+    old = latest_change["old_income1_paise"] + latest_change["old_income2_paise"]
+    new = latest_change["new_income1_paise"] + latest_change["new_income2_paise"]
+    if new <= old:
+        return None
+    return {
+        "kind": "income_up", "severity": "win",
+        "title": f"Income up {_rs(new - old)} \U0001f389",
+        "detail": f"Now {_rs(new)} a month, up from {_rs(old)} — "
+                  "new expenses split by the new ratio, past ones stay put.",
+    }
+
+
 def build_insights(data: dict) -> list[dict]:
     """Run every generator over the gathered data and return a ranked, non-null list.
 
@@ -138,6 +154,7 @@ def build_insights(data: dict) -> list[dict]:
         month_forecast(data["month_totals"], keys, data["current_day"], data["days_in_month"]),
         recurring_suggestion(data.get("recurring_candidates") or []),
         teamwork_win(data["month_totals"], keys),
+        income_up(data.get("latest_income_change")),
     ]
     insights = [g for g in generated if g]
     insights.sort(key=lambda i: _SEVERITY_ORDER.get(i["severity"], 9))

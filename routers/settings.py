@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Depends, Request
 
 from auth import require_auth
-from db import db
+from db import db, now
 
 router = APIRouter(dependencies=[Depends(require_auth)])
 
@@ -16,12 +16,26 @@ def get_settings():
 @router.put("/api/settings")
 async def put_settings(request: Request):
     b = await request.json()
+    new1, new2 = int(b["income1_paise"]), int(b["income2_paise"])
     with db() as c:
+        old = c.execute("SELECT income1_paise, income2_paise FROM settings WHERE id=1").fetchone()
         c.execute("""UPDATE settings SET name1=?, name2=?, income1_paise=?,
                   income2_paise=?, upi1=?, upi2=? WHERE id=1""",
-                  (b["name1"], b["name2"], int(b["income1_paise"]), int(b["income2_paise"]),
+                  (b["name1"], b["name2"], new1, new2,
                    b.get("upi1", "").strip(), b.get("upi2", "").strip()))
+        # log an audit row whenever either income actually moved (powers the feed + celebration)
+        if old and (old["income1_paise"] != new1 or old["income2_paise"] != new2):
+            c.execute("""INSERT INTO income_history (old_income1_paise, old_income2_paise,
+                      new_income1_paise, new_income2_paise, changed_at) VALUES (?,?,?,?,?)""",
+                      (old["income1_paise"], old["income2_paise"], new1, new2, now()))
     return {"ok": True}
+
+
+@router.get("/api/income-history")
+def income_history():
+    with db() as c:
+        return [dict(r) for r in
+                c.execute("SELECT * FROM income_history ORDER BY id DESC")]
 
 
 @router.put("/api/avatar")

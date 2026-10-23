@@ -1,7 +1,7 @@
 """Pure unit checks for insights_engine — no network, no DB. Run: python test_insights_engine.py"""
 from insights_engine import (
-    build_insights, category_spike, month_forecast, recurring_suggestion,
-    settle_nudge, teamwork_win,
+    build_insights, category_spike, income_up, month_forecast,
+    recurring_suggestion, settle_nudge, teamwork_win,
 )
 
 KEYS = ["2026-04", "2026-05", "2026-06", "2026-07", "2026-08", "2026-09"]
@@ -49,6 +49,16 @@ def test_teamwork_win():
     i = teamwork_win([9_000_00, 9_000_00, 9_000_00, 10_000_00, 8_000_00, 3_000_00], KEYS)
     assert i and i["severity"] == "win"
     assert teamwork_win([9_000_00, 9_000_00, 9_000_00, 10_000_00, 10_000_00, 3_000_00], KEYS) is None
+
+
+def test_income_up():
+    ch = {"old_income1_paise": 5000_00, "old_income2_paise": 5000_00,
+          "new_income1_paise": 7000_00, "new_income2_paise": 5000_00}
+    i = income_up(ch)                                    # total 10k -> 12k, a real raise
+    assert i and i["severity"] == "win" and i["kind"] == "income_up"
+    # a drop or no change -> quiet, and no change row -> quiet
+    assert income_up({**ch, "new_income1_paise": 3000_00}) is None   # total falls to 8k
+    assert income_up(None) is None
 
 
 def test_build_ranks_alerts_first():

@@ -94,6 +94,47 @@ def test_category_budget():
     assert cats[cid]["budget_paise"] is None
 
 
+def _set_income(i1, i2):
+    s = authed.get("/api/settings").json()
+    return authed.put("/api/settings", json={
+        "name1": s["name1"], "name2": s["name2"],
+        "income1_paise": i1, "income2_paise": i2,
+        "upi1": s.get("upi1") or "", "upi2": s.get("upi2") or ""})
+
+
+def test_income_split_frozen_on_income_change():
+    # a "By income" expense snapshots the current ratio and must survive an income change
+    authed.post("/api/expenses",
+                json={"description": "FreezeMe", "amount_paise": 100000, "paid_by": 1,
+                      "split_mode": "ratio"})
+    row = next(e for e in authed.get("/api/expenses").json() if e["description"] == "FreezeMe")
+    assert row["split_mode"] == "ratio"
+    assert row["override_r1"] is not None and row["override_r2"] is not None   # ratio was snapshotted
+    frozen = (row["share1_paise"], row["share2_paise"])
+    bal_before = authed.get("/api/balance").json()["raw"]
+    # skew income hard; the old expense's split and the balance must not move
+    _set_income(9000000, 1000000)
+    after = next(e for e in authed.get("/api/expenses").json() if e["description"] == "FreezeMe")
+    assert (after["share1_paise"], after["share2_paise"]) == frozen
+    assert authed.get("/api/balance").json()["raw"] == bal_before
+    # ...but a NEW income-split expense uses the NEW 90:10 ratio
+    authed.post("/api/expenses",
+                json={"description": "AfterRaise", "amount_paise": 100000, "paid_by": 1,
+                      "split_mode": "ratio"})
+    fresh = next(e for e in authed.get("/api/expenses").json() if e["description"] == "AfterRaise")
+    assert fresh["share1_paise"] == 90000
+
+
+def test_income_change_logged_and_in_feed():
+    before = len(authed.get("/api/income-history").json())
+    cur = authed.get("/api/settings").json()
+    _set_income(cur["income1_paise"] + 500000, cur["income2_paise"])
+    hist = authed.get("/api/income-history").json()
+    assert len(hist) == before + 1
+    assert hist[0]["new_income1_paise"] == cur["income1_paise"] + 500000
+    assert any(it.get("type") == "income" for it in authed.get("/api/activity?days=0").json())
+
+
 if __name__ == "__main__":
     for name, fn in sorted(globals().items()):
         if name.startswith("test_") and callable(fn):
