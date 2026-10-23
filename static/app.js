@@ -211,11 +211,17 @@ function applySplit(segEl, form, ovRow, s) {
   else if (s === "half") { form.override_r1.value = "1"; form.override_r2.value = "1"; ovRow.hidden = true; }
   else { ovRow.hidden = false; }
 }
-function setSplitFromOverride(segEl, form, ovRow, r1, r2) {
-  let s = "custom";
-  if (r1 == null || r2 == null || (r1 === "" )) s = "ratio";
-  else if (+r1 === 1 && +r2 === 1) s = "half";
+function setSplitFromMode(segEl, form, ovRow, mode, r1, r2) {
+  // prefer the stored split_mode; fall back to inferring from overrides for older rows
+  // (pre-split_mode) that have no flag yet.
+  let s = mode;
+  if (!s) {
+    if (r1 == null || r2 == null || r1 === "") s = "ratio";
+    else if (+r1 === 1 && +r2 === 1) s = "half";
+    else s = "custom";
+  }
   applySplit(segEl, form, ovRow, s);
+  // only a custom split shows its ratio; 'ratio'/'half' keep the snapshot hidden (applySplit clears it)
   if (s === "custom") { form.override_r1.value = r1; form.override_r2.value = r2; }
 }
 function wireOvQuick() {
@@ -374,6 +380,7 @@ async function addExpense(e) {
     description: f.description.value, amount_paise: toPaise(f.amount.value),
     category_id: +f.category_id.value, paid_by: segValue($("#paidby-seg")),
     date: f.date.value || undefined, note: f.note.value.trim(),
+    split_mode: $("#split-sel").value,
     override_r1: f.override_r1.value !== "" ? +f.override_r1.value : null,
     override_r2: f.override_r2.value !== "" ? +f.override_r2.value : null,
   } }));
@@ -513,7 +520,8 @@ function renderActList() {
   const sum = $("#act-sum");
   if (sum) sum.textContent = actFiltered() ? `${shown.length} · ${rs0(spend)}` : "";
   $("#activity-list").innerHTML = shown.length
-    ? shown.map((x) => x.type === "settlement" ? settlementRow(x) : expenseRow(x)).join("")
+    ? shown.map((x) => x.type === "settlement" ? settlementRow(x)
+        : x.type === "income" ? incomeRow(x) : expenseRow(x)).join("")
     : actFiltered()
       ? emptyState("activity", "No matches", "Nothing matches these filters. Try widening the range or clearing them.",
           "clearActFilters()", "Clear filters")
@@ -541,7 +549,8 @@ function clearActFilters() {
 }
 function expenseRow(x) {
   const to = x.paid_to ? ` · <span class="tag">→ ${esc(x.paid_to)}</span>` : "";
-  const ov = x.override_r1 != null ? ` · ${x.override_r1}:${x.override_r2}` : "";
+  // show a ratio only for a custom split — 'ratio'/'half' would just print the frozen income numbers
+  const ov = x.split_mode === "custom" && x.override_r1 != null ? ` · ${x.override_r1}:${x.override_r2}` : "";
   const cat = x.category || "—";
   const note = (x.note || "").trim() ? `<div class="row-note">${esc(x.note.trim())}</div>` : "";
   return `<div class="row row-tap" onclick="openEdit(${x.id})">
@@ -565,6 +574,20 @@ function settlementRow(x) {
     <div class="row-right"><div class="row-amt settle-amt-txt">${rs0(x.amount_paise)}</div></div>
   </div>`;
 }
+function incomeRow(x) {
+  const oldT = x.old_income1_paise + x.old_income2_paise;
+  const newT = x.new_income1_paise + x.new_income2_paise;
+  const up = newT >= oldT;
+  return `<div class="row row-income">
+    <span class="row-avatar income-avatar ${up ? "up" : "down"}">${up ? "↑" : "↓"}</span>
+    <div class="row-main">
+      <div class="row-desc">Income ${up ? "increased" : "changed"}</div>
+      <div class="row-meta">${fmtDate(x.date)} · ${rs0(oldT)} → ${rs0(newT)}/mo</div>
+    </div>
+    <div class="row-right"><div class="row-amt">${rs0(newT)}</div>
+      <div class="row-shares">${person(1).letter} ${rs0(x.new_income1_paise)} · ${person(2).letter} ${rs0(x.new_income2_paise)}</div></div>
+  </div>`;
+}
 async function delExpense(id) {
   if (!confirm("Delete this expense?")) return;
   await api("/api/expenses/" + id, { method: "DELETE" });
@@ -585,7 +608,7 @@ function openEdit(id) {
   f.note.value = x.note || "";
   f.date.value = x.date;
   setSeg($("#edit-paidby-seg"), x.paid_by);
-  setSplitFromOverride($("#edit-split-seg"), f, $("#edit-ov"),
+  setSplitFromMode($("#edit-split-seg"), f, $("#edit-ov"), x.split_mode,
     x.override_r1 == null ? "" : x.override_r1, x.override_r2 == null ? "" : x.override_r2);
   $("#edit-modal").hidden = false;
 }
@@ -597,6 +620,7 @@ async function saveEdit(e) {
     date: f.date.value, description: f.description.value, amount_paise: toPaise(f.amount.value),
     category_id: +f.category_id.value, paid_by: segValue($("#edit-paidby-seg")), paid_to: f.paid_to.value,
     note: f.note.value.trim(),
+    split_mode: $("#edit-split-seg .seg-opt.on")?.dataset.s || "custom",
     override_r1: f.override_r1.value !== "" ? +f.override_r1.value : null,
     override_r2: f.override_r2.value !== "" ? +f.override_r2.value : null,
   } }));
@@ -818,13 +842,63 @@ function updateRatioPreview() {
 }
 async function saveSettings(e) {
   e.preventDefault(); const f = e.target;
+  // capture the old total before boot() reassigns SETTINGS, to detect a raise
+  const oldTotal = (SETTINGS?.income1_paise || 0) + (SETTINGS?.income2_paise || 0);
+  const newTotal = toPaise(f.income1.value) + toPaise(f.income2.value);
   await api("/api/settings", jbody({ method: "PUT", body: {
     name1: f.name1.value, name2: f.name2.value,
     income1_paise: toPaise(f.income1.value), income2_paise: toPaise(f.income2.value),
     upi1: f.upi1.value, upi2: f.upi2.value } }));
   SETTINGS_DIRTY = false;
   await boot(); flash(f.querySelector('button[type="submit"]'), "Saved ✓");
-  toast("Settings saved");
+  if (newTotal > oldTotal) celebrateIncome(oldTotal, newTotal);
+  else toast("Settings saved");
+}
+
+// --- income raise celebration ----------------------------------------------
+function celebrateIncome(oldTotal, newTotal) {
+  const up = newTotal - oldTotal;
+  const pct = oldTotal > 0 ? Math.round(up / oldTotal * 100) : 0;
+  $("#celebrate-amt").textContent = rs0(newTotal) + "/mo";
+  $("#celebrate-sub").innerHTML =
+    `Up <b>${rs0(up)}</b>${pct ? ` · ${pct}% more` : ""} from ${rs0(oldTotal)}.<br>`
+    + `New expenses split by your updated ratio — everything already logged stays exactly as it was.`;
+  $("#celebrate-modal").hidden = false;
+  fireConfetti();
+}
+function closeCelebrate() { $("#celebrate-modal").hidden = true; }
+
+// self-contained confetti — no dependency, works offline, respects reduced-motion
+function fireConfetti() {
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const cv = document.createElement("canvas");
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const W = cv.width = innerWidth * dpr, H = cv.height = innerHeight * dpr;
+  cv.style.cssText = "position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:120";
+  document.body.appendChild(cv);
+  const ctx = cv.getContext("2d");
+  const css = getComputedStyle(document.documentElement);
+  const colors = [css.getPropertyValue("--a").trim() || "#13a89e",
+    css.getPropertyValue("--b").trim() || "#e4572e", "#f6c445", "#22c55e"];
+  const g = 0.14 * dpr;
+  const P = Array.from({ length: 150 }, () => ({
+    x: W / 2 + (Math.random() - 0.5) * 120 * dpr, y: H * 0.34,
+    vx: (Math.random() - 0.5) * 11 * dpr, vy: (Math.random() * -10 - 4) * dpr,
+    s: (4 + Math.random() * 5) * dpr, rot: Math.random() * Math.PI, vr: (Math.random() - 0.5) * 0.3,
+    c: colors[(Math.random() * colors.length) | 0],
+  }));
+  let t = 0;
+  (function frame() {
+    t++; ctx.clearRect(0, 0, W, H);
+    for (const p of P) {
+      p.vy += g; p.x += p.vx; p.y += p.vy; p.rot += p.vr;
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+      ctx.globalAlpha = Math.max(0, 1 - t / 140);
+      ctx.fillStyle = p.c; ctx.fillRect(-p.s / 2, -p.s / 2, p.s, p.s * 0.62);
+      ctx.restore();
+    }
+    if (t < 140) requestAnimationFrame(frame); else cv.remove();
+  })();
 }
 async function fillCategorySelects(cats) {
   if (!cats) cats = await api("/api/categories");
@@ -943,7 +1017,7 @@ Object.assign(window, {
   doLogin, goTab, addExpense, toggleCatPop, scanReceipt, setSplitAdd, copyUpi, settleUp,
   addRecurring, saveSettings, pickAvatar, removeAvatar, onAvatarPick, addCategory,
   setTheme, exportCsv, saveOnboarding, skipOnboarding, dismissPayPrompt, confirmPayPrompt,
-  closeEdit, saveEdit, deleteFromEdit, setActFilter,
+  closeEdit, saveEdit, deleteFromEdit, setActFilter, closeCelebrate,
   actSearch, clearActSearch, actSetPayer, actSetAmount, actSetRange, clearActFilters,
   // handlers embedded in JS-rendered markup
   pickCat, openEdit, delCategory, delRecurring, delSettlement,

@@ -55,6 +55,13 @@ def activity(days: int = 90):
         for r in c.execute(setl_q, () if all_time else (f"-{int(days)} days",)):
             d = dict(r); d["type"] = "settlement"
             items.append(d)
+        ih_q = "SELECT * FROM income_history ORDER BY id DESC" if all_time else \
+            "SELECT * FROM income_history WHERE substr(changed_at,1,10) >= date('now', ?) " \
+            "ORDER BY id DESC"
+        for r in c.execute(ih_q, () if all_time else (f"-{int(days)} days",)):
+            d = dict(r); d["type"] = "income"
+            d["date"] = (r["changed_at"] or "")[:10]   # give it a date so it sorts into the feed
+            items.append(d)
         items.sort(key=lambda x: (x["date"], x.get("created_at") or "", x["id"]), reverse=True)
         return items
 
@@ -84,5 +91,17 @@ def insights():
             "name1": a["name1"], "name2": a["name2"],
             "weeks_since_settle": weeks_since_last_settlement(c),
             "recurring_candidates": recurring_candidates(c),
+            "latest_income_change": _recent_income_change(c, today),
         }
     return {"insights": build_insights(data)}
+
+
+def _recent_income_change(c, today, within_days: int = 14):
+    """The most recent income change, but only while it's fresh — so the celebratory
+    card appears for a couple of weeks after a raise, then retires on its own."""
+    row = c.execute("SELECT * FROM income_history ORDER BY id DESC LIMIT 1").fetchone()
+    if not row or not row["changed_at"]:
+        return None
+    if (today - date.fromisoformat(row["changed_at"][:10])).days > within_days:
+        return None
+    return dict(row)

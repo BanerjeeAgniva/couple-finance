@@ -445,6 +445,20 @@ select { appearance: none; background-image: url("data:image/svg+xml;utf8,<svg x
 .btn-danger:hover { background: var(--b); color: #fff; }
 @media (min-width: 721px) { .modal { align-items: center; } .modal-card { border-radius: var(--r-lg); } }
 
+/* income-raise celebration */
+.celebrate-card { padding: 28px 22px 22px; text-align: center; background: var(--card); }
+.celebrate-emoji { font-size: 52px; line-height: 1; margin-bottom: 6px; }
+.celebrate-card h2 { font-size: 22px; margin: 2px 0 10px; }
+.celebrate-amt { font-size: 26px; font-weight: 700; color: var(--a); font-variant-numeric: tabular-nums; margin: 0 0 6px; }
+.celebrate-sub { color: var(--muted); font-size: 13.5px; line-height: 1.5; margin: 0 0 18px; }
+@media (prefers-reduced-motion: no-preference) { .celebrate-emoji { animation: pop .45s cubic-bezier(.22,1,.36,1); } }
+@keyframes pop { from { transform: scale(.5); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* income-change row in the activity feed */
+.income-avatar { background: var(--ground); color: var(--muted); border: 1px solid var(--line); font-size: 16px; }
+.income-avatar.up { background: #e9f9f0; color: #16a34a; border-color: #bbe9cd; }
+.income-avatar.down { background: var(--ground); color: var(--muted); }
+
 /* trends charts */
 .trends-head { margin-bottom: 16px; }
 .leg-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }

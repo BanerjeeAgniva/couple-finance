@@ -87,6 +87,11 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             date TEXT, amount_paise INTEGER, from_person INTEGER,
             to_person INTEGER, note TEXT);
+        CREATE TABLE IF NOT EXISTS income_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            old_income1_paise INTEGER, old_income2_paise INTEGER,
+            new_income1_paise INTEGER, new_income2_paise INTEGER,
+            changed_at TEXT);
         """)
         if not c.execute("SELECT 1 FROM settings WHERE id=1").fetchone():
             c.execute("INSERT INTO settings VALUES (1,?,?,?,?)",
@@ -117,6 +122,25 @@ def migrate():
             c.execute("ALTER TABLE expenses ADD COLUMN note TEXT")
         except Exception:
             pass
+        # split_mode remembers HOW each expense was split ('ratio' = by income, 'half', 'custom')
+        # so income-split rows stay labelled after we snapshot their ratio into the overrides.
+        try:
+            c.execute("ALTER TABLE expenses ADD COLUMN split_mode TEXT")
+        except Exception:
+            pass  # column already exists → backfill already ran on a prior boot
+        else:
+            # One-time, runs only when the column is brand-new. Classify existing rows and
+            # FREEZE income-split ones (NULL overrides) at the CURRENT income ratio — there's
+            # no income history to reconstruct older ratios, so "now" is the honest freeze point.
+            # After this, editing income never re-splits a past expense.
+            g1, g2 = global_ratio(c)
+            c.execute("UPDATE expenses SET split_mode='half' "
+                      "WHERE override_r1=1 AND override_r2=1")
+            c.execute("UPDATE expenses SET split_mode='custom' "
+                      "WHERE override_r1 IS NOT NULL AND override_r2 IS NOT NULL "
+                      "AND NOT (override_r1=1 AND override_r2=1)")
+            c.execute("UPDATE expenses SET split_mode='ratio', override_r1=?, override_r2=? "
+                      "WHERE override_r1 IS NULL OR override_r2 IS NULL", (g1, g2))
         # frequently-used delivery apps as ready-made categories (idempotent; name is UNIQUE)
         for name in ("Amazon", "Blinkit", "Instamart", "Zepto", "Swiggy", "Zomato",
                      "Flipkart", "Pronto", "Furlenco", "Rentomojo", "Snabbit", "UrbanClap",
@@ -141,15 +165,23 @@ def global_ratio(c) -> tuple[int, int]:
 def post_due_recurring(c):
     ym = date.today().strftime("%Y-%m")
     today = date.today().day
+    g1, g2 = global_ratio(c)   # snapshot income-based rules at THIS month's ratio, once per run
     for r in c.execute("SELECT * FROM recurring").fetchall():
         if r["last_posted_ym"] == ym or today < r["day_of_month"]:
             continue
         d = date.today().replace(day=min(r["day_of_month"], 28)).isoformat()
+        or1, or2 = r["override_r1"], r["override_r2"]
+        if or1 is None or or2 is None:       # income-based rule → freeze at the current ratio
+            or1, or2, mode = g1, g2, "ratio"
+        elif or1 == 1 and or2 == 1:
+            mode = "half"
+        else:
+            mode = "custom"
         c.execute("""INSERT INTO expenses (date, description, amount_paise,
-                   category_id, paid_by, paid_to, override_r1, override_r2, created_at)
-                   VALUES (?,?,?,?,?,?,?,?,?)""",
+                   category_id, paid_by, paid_to, override_r1, override_r2, split_mode, created_at)
+                   VALUES (?,?,?,?,?,?,?,?,?,?)""",
                   (d, r["description"], r["amount_paise"], r["category_id"],
-                   r["paid_by"], r["paid_to"], r["override_r1"], r["override_r2"], now()))
+                   r["paid_by"], r["paid_to"], or1, or2, mode, now()))
         c.execute("UPDATE recurring SET last_posted_ym=? WHERE id=?", (ym, r["id"]))
 
 
